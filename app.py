@@ -668,33 +668,146 @@ with tab_hist:
                     st.error("Feche o orcamentos.xlsx no Excel e tente de novo.")
 
 # ------------------------------- REFORÇOS (INSERTOS) -------------------------
+
+ARQUIVO_MATERIAIS = Path(__file__).parent / "materiais_reforco.xlsx"
+
+# Base inicial (extraída da planilha ORÇAMENTO INSERTOS) — usada só na 1ª execução
+MATERIAIS_INICIAIS = [
+    # (código, descrição, preço R$/un, unidade)
+    ("109299000",  "CHAPA DE ACO 1,90 x 1000 x 3000mm - NBR7008 ZEE GRAU 1 Z100", 7.31,   "kg"),
+    ("1064003000", "CHAPA DE ALUMINIO 1,50 X 1000 X 2000 mm - LIGA 1200 - H14",  28.75,  "kg"),
+    ("107679000",  "CHAPA DE ACO 1,55X1000X2680 - NBR 7008 ZEE - GRAU 2 - Z100",  6.76,   "kg"),
+    ("107676000",  "CHAPA DE ACO 1,20X1500X1795 - ST 05 Z/NBR 7008 ZEE GRAU 2,+Z", 8.54, "kg"),
+    ("106546000",  "CHAPA DE ACO 1,55mm 1200 x 3000mm NBR 7008 ZEE GR1 (Z100)",   4.2525, "kg"),
+    ("100755000",  "CHAPA DE ACO (código 100755000)",                             6.87,   "kg"),
+    ("100106000",  "CHAPA DE ACO 4,75mm FQD 1200 x 3000 - SAE 1006 DEC",          5.8373, "kg"),
+    ("109796000",  "CHAPA DE ACO (código 109796000)",                             5.0438, "kg"),
+    ("106039000",  "CHAPA DE ACO (código 106039000)",                             5.849,  "kg"),
+    ("103085000",  "CHAPA DE ACO (código 103085000)",                             4.22,   "kg"),
+    ("109389000",  "CHAPA DE ACO 1,00 x 1500 x 2700mm GI EN10346 DX56D Z140-M-C-", 6.87,  "kg"),
+    ("103209000",  "CHAPA DE ACO (código 103209000)",                             5.1084, "kg"),
+    ("106475000",  "MANTA DE ISOLAMENTO",                                         39.283, "m²"),
+    ("100634000",  "LÍQUIDO (código 100634000)",                                  23.53,  "L"),
+    ("100106000",  "CHAPA DE ACO 4,75mm FQD 1200 x 3000 - SAE 1006 DEC",          5.8373, "kg"),
+    ("107670000",  "CHAPA DE AÇO 6,35 x 1200 x 2000mm - NBR 6656 LNE-38 DECOL",   5.91,   "kg"),
+]
+
+
+def _inicializar_banco_materiais():
+    """Cria o arquivo de materiais com os dados iniciais se ainda não existir."""
+    if not ARQUIVO_MATERIAIS.exists():
+        df = pd.DataFrame(MATERIAIS_INICIAIS,
+                          columns=["Código", "Descrição", "Preço Unit. (R$)", "Un"])
+        # remove códigos duplicados mantendo o primeiro
+        df = df.drop_duplicates(subset=["Código"], keep="first").reset_index(drop=True)
+        df.to_excel(ARQUIVO_MATERIAIS, index=False)
+
+
+def carregar_materiais() -> pd.DataFrame:
+    """Retorna DataFrame com Código, Descrição, Preço Unit. (R$), Un."""
+    _inicializar_banco_materiais()
+    try:
+        df = pd.read_excel(ARQUIVO_MATERIAIS)
+        df["Código"] = df["Código"].astype(str)
+        return df
+    except Exception:
+        return pd.DataFrame(MATERIAIS_INICIAIS,
+                            columns=["Código", "Descrição", "Preço Unit. (R$)", "Un"])
+
+
+def adicionar_material(codigo: str, descricao: str, preco: float, unidade: str) -> bool:
+    """Adiciona material ao banco. Retorna False se o código já existir."""
+    df = carregar_materiais()
+    if str(codigo) in df["Código"].values:
+        return False
+    novo = pd.DataFrame([{
+        "Código": str(codigo),
+        "Descrição": descricao,
+        "Preço Unit. (R$)": float(preco),
+        "Un": unidade,
+    }])
+    df = pd.concat([df, novo], ignore_index=True)
+    df.to_excel(ARQUIVO_MATERIAIS, index=False)
+    return True
+
+
 with tab_reforco:
     st.markdown("### 🔩 Reforços / Insertos")
-    st.caption("Matéria-prima + operações externas + processo de fabricação")
+    st.caption("Selecione o material no catálogo — o preço é preenchido automaticamente.")
 
     centros = carregar_centros_custo()
-    opcoes_cc = {f"{k} - {v[0]}": (k, v[1]) for k, v in sorted(centros.items())}
     grupos = carregar_grupos_maquina()
+    df_materiais = carregar_materiais()
 
-    # Formulário de matéria-prima (linhas dinâmicas)
+    # Mapeamento código -> (descrição, preço, unidade) para lookup rápido
+    mapa_materiais = {
+        str(row["Código"]): (row["Descrição"], float(row["Preço Unit. (R$)"]), row["Un"])
+        for _, row in df_materiais.iterrows()
+    }
+
+    # -------- Painel para cadastrar novo material (expansível) --------
+    with st.expander("➕ Cadastrar novo material no banco"):
+        with st.form("form_novo_material", clear_on_submit=True):
+            c1, c2, c3, c4 = st.columns([1.2, 2.5, 1, 1])
+            novo_cod = c1.text_input("Código")
+            nova_desc = c2.text_input("Descrição")
+            novo_preco = c3.number_input("Preço (R$)", min_value=0.0, value=0.0, format="%.4f")
+            nova_un = c4.selectbox("Unidade", ["kg", "m²", "L", "un", "m"])
+            salvar_mat = st.form_submit_button("Salvar material", type="primary")
+
+        if salvar_mat:
+            if not novo_cod.strip() or not nova_desc.strip():
+                st.warning("Preencha código e descrição.")
+            elif adicionar_material(novo_cod.strip(), nova_desc.strip(), novo_preco, nova_un):
+                st.success(f"Material **{novo_cod}** adicionado ao banco.")
+                st.rerun()
+            else:
+                st.warning(f"Código **{novo_cod}** já existe no banco.")
+
+    st.divider()
+
+    # -------- Lista de códigos com "—" (vazio) no topo --------
+    opcoes_material = ["— selecione —"] + [
+        f"{cod} | {desc} | R$ {preco:.4f}/{un}"
+        for cod, (desc, preco, un) in mapa_materiais.items()
+    ]
+    codigos_ordenados = ["— selecione —"] + sorted(mapa_materiais.keys())
+
+    # -------- 1) Matéria-prima --------
     st.markdown("**1) Matéria-prima**")
-    n_mp = st.number_input("Quantas linhas de matéria-prima?", min_value=1, max_value=20, value=1, step=1, key="n_mp")
+    n_mp = st.number_input("Quantas linhas de matéria-prima?",
+                           min_value=1, max_value=20, value=1, step=1, key="n_mp")
+
     materiais_input = []
     for i in range(int(n_mp)):
         with st.container(border=True):
             st.markdown(f"*Linha {i+1}*")
-            c1, c2, c3, c4, c5 = st.columns([1.5, 2.5, 1, 1, 1])
-            cod = c1.text_input("Código", key=f"mp_cod_{i}")
-            desc_default = next((m[1] for m in MATERIAS_PRIMA if m[0] == cod), "")
-            desc = c2.text_input("Descrição", value=desc_default, key=f"mp_desc_{i}")
-            preco_default = next((m[2] for m in MATERIAS_PRIMA if m[0] == cod), 0.0)
-            preco = c3.number_input("Preço (R$)", min_value=0.0, value=float(preco_default), format="%.4f", key=f"mp_preco_{i}")
-            qtd = c4.number_input("Qtd", min_value=0.0, value=0.0, key=f"mp_qtd_{i}")
-            un = c5.selectbox("Un", ["kg", "m²", "L", "un"], key=f"mp_un_{i}")
-            materiais_input.append((cod, desc, preco, qtd, un))
+            c1, c2, c3 = st.columns([3, 1, 1])
+            sel_idx = c1.selectbox(
+                "Material",
+                options=range(len(opcoes_material)),
+                format_func=lambda j: opcoes_material[j],
+                key=f"mp_sel_{i}",
+            )
+            qtd = c2.number_input("Qtd", min_value=0.0, value=0.0,
+                                  step=0.01, key=f"mp_qtd_{i}")
+            # Mostra preço/unidade do material selecionado
+            if sel_idx > 0:
+                cod_sel = codigos_ordenados[sel_idx]
+                desc, preco, un = mapa_materiais[cod_sel]
+                c3.metric(f"R$/{un}", f"{preco:.4f}")
+                if qtd > 0:
+                    st.caption(f"Subtotal: **{brl(qtd * preco)}**")
+                materiais_input.append((cod_sel, desc, preco, qtd, un))
+            else:
+                c3.metric("R$/un", "—")
+                if qtd > 0:
+                    st.caption("⚠ Selecione um material para calcular.")
 
+    # -------- 2) Operações externas (terceiros) --------
     st.markdown("**2) Operações externas (terceiros)**")
-    n_ter = st.number_input("Quantas linhas de terceiros?", min_value=0, max_value=10, value=0, step=1, key="n_ter")
+    n_ter = st.number_input("Quantas linhas de terceiros?",
+                            min_value=0, max_value=10, value=0, step=1, key="n_ter")
     terceiros_input = []
     for i in range(int(n_ter)):
         with st.container(border=True):
@@ -702,25 +815,43 @@ with tab_reforco:
             cod = c1.text_input("Código", key=f"ter_cod_{i}")
             desc = c2.text_input("Descrição", key=f"ter_desc_{i}")
             qtd = c3.number_input("Qtd", min_value=0.0, value=1.0, key=f"ter_qtd_{i}")
-            preco = c4.number_input("Preço unit. (R$)", min_value=0.0, value=0.0, key=f"ter_preco_{i}")
+            preco = c4.number_input("Preço unit. (R$)", min_value=0.0,
+                                    value=0.0, key=f"ter_preco_{i}")
             terceiros_input.append((cod, desc, qtd, preco))
 
+    # -------- 3) Processo de fabricação (mão-de-obra) --------
     st.markdown("**3) Processo de fabricação (mão-de-obra)**")
-    n_op = st.number_input("Quantas operações?", min_value=1, max_value=20, value=1, step=1, key="n_op")
+    n_op = st.number_input("Quantas operações?", min_value=1, max_value=20,
+                           value=1, step=1, key="n_op")
+
+    opcoes_cc = {f"{k} - {v[0]} (R$ {v[1]:.2f}/h)": (k, v[1])
+                 for k, v in sorted(centros.items())}
     operacoes_input = []
     for i in range(int(n_op)):
         with st.container(border=True):
             st.markdown(f"*Operação {i+1}*")
-            c1, c2, c3, c4, c5, c6 = st.columns([1, 2.5, 2, 1, 1, 1])
-            num_op = c1.number_input("Nº op.", min_value=1, value=10 * (i + 1), step=10, key=f"op_num_{i}")
-            descricao = c2.text_input("Descrição", key=f"op_desc_{i}")
-            cc_label = c3.selectbox("Centro de custo", list(opcoes_cc.keys()), key=f"op_cc_{i}")
-            setup = c4.number_input("Setup (min)", min_value=0.0, value=0.0, key=f"op_setup_{i}")
-            tempo = c5.number_input("Tempo op. (min)", min_value=0.0, value=0.0, key=f"op_tempo_{i}")
-            homens = c6.number_input("Nº homens", min_value=1, value=1, key=f"op_homens_{i}")
-            operacoes_input.append((int(num_op), descricao, opcoes_cc[cc_label][0], setup, tempo, int(homens)))
+            c1, c2, c3 = st.columns([1, 3, 2])
+            num_op = c1.number_input("Nº op.", min_value=1, value=10 * (i + 1),
+                                     step=10, key=f"op_num_{i}")
+            descricao = c2.text_input("Descrição da operação", key=f"op_desc_{i}")
+            cc_label = c3.selectbox("Centro de custo",
+                                    list(opcoes_cc.keys()), key=f"op_cc_{i}")
+            c4, c5, c6, c7 = st.columns(4)
+            grupo_maq = c4.selectbox("Grupo máquina", grupos, key=f"op_grupo_{i}")
+            setup = c5.number_input("Setup (min)", min_value=0.0, value=0.0,
+                                    key=f"op_setup_{i}")
+            tempo = c6.number_input("Tempo op. (min)", min_value=0.0, value=0.0,
+                                    key=f"op_tempo_{i}")
+            homens = c7.number_input("Nº homens", min_value=1, value=1,
+                                     key=f"op_homens_{i}")
+            operacoes_input.append((
+                int(num_op), descricao, opcoes_cc[cc_label][0],
+                setup, tempo, int(homens),
+            ))
 
-    if st.button("Calcular reforço", type="primary"):
+    st.divider()
+
+    if st.button("🔍 Calcular reforço", type="primary", use_container_width=True):
         res = calcular_reforco(
             cod_item="—",
             materiais=materiais_input,
@@ -738,13 +869,26 @@ with tab_reforco:
 
         if res["linhas_materiais"]:
             st.markdown("**Matéria-prima**")
-            st.dataframe(pd.DataFrame(res["linhas_materiais"]), hide_index=True, use_container_width=True)
+            df_mp = pd.DataFrame(res["linhas_materiais"])
+            df_mp["Total (R$)"] = df_mp["Total (R$)"].map(brl)
+            df_mp["Preço Unit. (R$)"] = df_mp["Preço Unit. (R$)"].map(
+                lambda v: f"{v:.4f}"
+            )
+            st.dataframe(df_mp, hide_index=True, use_container_width=True)
+
         if res["linhas_terceiros"]:
             st.markdown("**Terceiros**")
-            st.dataframe(pd.DataFrame(res["linhas_terceiros"]), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(res["linhas_terceiros"]),
+                         hide_index=True, use_container_width=True)
+
         if res["linhas_operacoes"]:
             st.markdown("**Operações**")
-            st.dataframe(pd.DataFrame(res["linhas_operacoes"]), hide_index=True, use_container_width=True)
+            df_op = pd.DataFrame(res["linhas_operacoes"])
+            for col in ["Custo Hora (R$)", "R$ Setup", "R$ Operação"]:
+                df_op[col] = df_op[col].map(brl)
+            st.dataframe(df_op, hide_index=True, use_container_width=True)
+
+        st.info(f"💡 Custo total do reforço: **{brl(res['custo_total'])}**")
 
 # ---------------------------------- MONTAGEM ---------------------------------
 with tab_montagem:
