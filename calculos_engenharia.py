@@ -105,7 +105,7 @@ def volume_recipiente(comprimento_mm, largura_mm, altura_mm):
     return (comprimento_mm / 1000) * (largura_mm / 1000) * (altura_mm / 1000) * 1000  # litros
 
 # ---------------------------------------------------------------------------
-# APROVEITAMENTO DE CHAPA + GUILHOTINA (Igual à Planilha)
+# APROVEITAMENTO DE CHAPA (Igual à Planilha - Sem Guilhotina)
 # ---------------------------------------------------------------------------
 
 def aproveitamento_chapa(esp_chapa_mm, larg_chapa_mm, comp_chapa_mm,
@@ -140,7 +140,7 @@ def aproveitamento_chapa(esp_chapa_mm, larg_chapa_mm, comp_chapa_mm,
     # Retalho total da chapa
     retalho_total = max(peso_chapa - peso_total_pecas, 0)
     
-    # Retalho rateado por peça
+    # Retalho rateado por peça (o que o cliente pediu)
     retalho_por_peca = retalho_total / total_pecas if total_pecas > 0 else 0
 
     # Aproveitamento em %
