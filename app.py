@@ -1087,26 +1087,91 @@ with tab_eng:
 #------------------------------- APROVEITAMENTO -------------------------------------------
 with tab_aprov:
     st.markdown("### ✂️ Aproveitamento de chapa + Guilhotina")
+    st.caption("Calcule quantas peças cabem na chapa, o peso unitário da peça e o retalho rateado.")
+
     with st.form("form_aprov"):
+        st.markdown("**1) Dados da Chapa**")
         c1, c2, c3 = st.columns(3)
         e_chapa = c1.number_input("Espessura chapa (mm)", value=1.5, key="ap_e_chapa")
         l_chapa = c2.number_input("Largura chapa (mm)", value=1000.0, key="ap_l_chapa")
         c_chapa = c3.number_input("Comprimento chapa (mm)", value=2810.0, key="ap_c_chapa")
-        c4, c5, c6 = st.columns(3)
+        
+        st.markdown("**2) Dados da Peça**")
+        c4, c5, c6, c7 = st.columns(4)
         e_peca = c4.number_input("Espessura peça (mm)", value=1.5, key="ap_e_peca")
         l_peca = c5.number_input("Largura peça (mm)", value=453.0, key="ap_l_peca")
         c_peca = c6.number_input("Comprimento peça (mm)", value=496.0, key="ap_c_peca")
-        qtd_blank = st.number_input("Qtd peças por blank", min_value=1, value=1, key="ap_qtd_blank")
-        calc = st.form_submit_button("Calcular", type="primary")
+        qtd_blank = c7.number_input("Qtd peças / blank", min_value=1, value=1, key="ap_qtd_blank")
+        
+        st.markdown("**3) Tempo de Guilhotina (Opcional)**")
+        c8, c9, c10 = st.columns(3)
+        pcs_hora_tira = c8.number_input("Peças/hora (cortar tira)", min_value=1, value=360, key="ap_pcs_tira")
+        pcs_hora_peca = c9.number_input("Peças/hora (cortar peça)", min_value=1, value=360, key="ap_pcs_peca")
+        custo_hora = c10.number_input("Custo Hora Guilhotina (R$)", min_value=0.0, value=140.0, key="ap_custo_hora")
+        
+        calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
 
     if calc:
         r = aproveitamento_chapa(e_chapa, l_chapa, c_chapa,
                                  e_peca, l_peca, c_peca, int(qtd_blank))
+        
+        # --- MÉTRICAS PRINCIPAIS (Por Peça) ---
+        st.markdown("#### Resultados (Por Peça)")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Melhor modelo", r["escolhido"])
-        m2.metric("Peças por chapa", r["total_pecas"])
-        m3.metric("Peso da chapa", f"{r['peso_chapa_kg']} kg")
-        m4.metric("Retalho", f"{r['retalho_kg']} kg")
-        st.json(r)
+        m1.metric("Peso da Peça", f"{r['peso_peca_kg']:.3f} kg")
+        m2.metric("Retalho por Peça", f"{r['retalho_por_peca_kg']:.3f} kg")
+        m3.metric("Peças na Chapa", r["total_pecas"])
+        m4.metric("Aproveitamento", f"{r['aproveitamento_pct']}%")
 
+        # --- TEMPOS ---
+        if pcs_hora_tira > 0 and pcs_hora_peca > 0:
+            st.markdown("#### Tempos e Custo")
+            tempo_tira = (r["n_tiras"] / pcs_hora_tira) * 60
+            tempo_peca = (r["total_pecas"] / pcs_hora_peca) * 60
+            tempo_total = tempo_tira + tempo_peca
+            custo_total = (tempo_total / 60) * custo_hora
+            custo_peca = custo_total / r["total_pecas"]
+
+            t1, t2, t3, t4 = st.columns(4)
+            t1.metric("Tempo Cortar Tira", f"{tempo_tira:.2f} min")
+            t2.metric("Tempo Cortar Peça", f"{tempo_peca:.2f} min")
+            t3.metric("Custo Total Guilhotina", brl(custo_total))
+            t4.metric("Custo Guilhotina/Peça", brl(custo_peca))
+
+        # --- DETALHES ---
+        st.markdown("---")
+        st.markdown("#### Detalhamento do Aproveitamento")
+        
+        # Recriando a tabela da planilha
+        detalhes = {
+            "Item": [
+                "Peso da chapa inteira",
+                "Peso total de todas as peças",
+                "Peso do retalho total",
+                "Modelo Vencedor",
+                "Tiras por chapa",
+                "Peças por tira",
+                "Peças por blank"
+            ],
+            "Valor": [
+                f"{r['peso_chapa_kg']:.3f} kg",
+                f"{r['peso_total_pecas_kg']:.3f} kg",
+                f"{r['retalho_total_kg']:.3f} kg",
+                r["escolhido"],
+                r["n_tiras"],
+                r["n_pecas_por_tira"],
+                r["qtd_pecas_por_blank"]
+            ]
+        }
+        st.table(pd.DataFrame(detalhes).set_index("Item"))
+
+        # --- RESUMO NARRATIVO (igual à planilha) ---
+        st.info(
+            f"💡 **Resumo:** Nesta peça foi adotado o blank otimizado de **{r['n_tiras']} tiras x {r['n_pecas_por_tira']} peças**, "
+            f"totalizando **{r['total_pecas']} peças** por chapa. "
+            f"Cada peça pesa **{r['peso_peca_kg']:.3f} kg** e gera **{r['retalho_por_peca_kg']:.3f} kg** de retalho."
+        )
+
+        with st.expander("Ver dados brutos (JSON)"):
+            st.json(r)
 
