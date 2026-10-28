@@ -733,13 +733,6 @@ with tab_novo:
             st.warning(str(e))
 
         if prev:
-            m1, m2 = st.columns(2)
-            m1.metric("Custo total", brl(prev["Custo Total (R$)"]))
-            m2.metric("Peças por chapa", prev["Qtd Peças/Chapa"])
-            m3, m4 = st.columns(2)
-            m3.metric("Peso bruto", f"{prev['Peso Bruto (kg)']:.3f} kg".replace(".", ","))
-            m4.metric("Blank (mm)", prev["Blank (mm)"])
-
             # --- BUSCA INTELIGENTE DA CHAPA ---
             cto, _ = tipo_conceito_params(params["conceito"])
             comp_c_cto = params["comprimento"] + cto
@@ -752,22 +745,31 @@ with tab_novo:
                 larg_c_cto
             )
             
-            st.markdown("---")
-            st.markdown("**Matéria-Prima (Chapa)**")
+            # Injeta os dados da chapa (ou o erro) direto no dicionário 'prev'
             if erro_chapa:
-                st.error(erro_chapa)
+                prev["Chapa Código"] = "ERRO"
+                prev["Chapa Dimensão"] = erro_chapa
             else:
                 cod, dim, esp, cor = chapa_info
-                st.success(f"**Código da Chapa:** {cod}")
-                st.info(f"**Dimensão:** {dim[0]} x {dim[1]} mm\n\n"
-                        f"**Espessura:** {esp} mm | **Cor:** {cor}")
+                prev["Chapa Código"] = cod
+                prev["Chapa Dimensão"] = f"{dim[0]} x {dim[1]} mm ({cor})"
+
+            # --- MÉTRICAS NA TELA ---
+            m1, m2 = st.columns(2)
+            m1.metric("Custo total", brl(prev["Custo Total (R$)"]))
+            m2.metric("Peças por chapa", prev["Qtd Peças/Chapa"])
+            m3, m4 = st.columns(2)
+            m3.metric("Peso bruto", f"{prev['Peso Bruto (kg)']:.3f} kg".replace(".", ","))
+            m4.metric("Blank (mm)", prev["Blank (mm)"])
 
             st.markdown("---")
             st.markdown("**Custo por etapa (R$)**")
             df_custos = pd.DataFrame({"Etapa": list(custos.keys()), "Custo (R$)": list(custos.values())}).set_index("Etapa")
             st.bar_chart(df_custos)
 
+            # --- TABELA DE DADOS ---
             with st.expander("Ver todos os campos do cálculo"):
+                # Como o 'prev' já tem os dados da chapa agora, eles vão aparecer magicamente na tabela
                 detalhe = pd.DataFrame([(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"])
                 st.table(detalhe.set_index("Campo"))
                 
