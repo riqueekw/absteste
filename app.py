@@ -1084,9 +1084,8 @@ with tab_eng:
         alt = c3.number_input("Altura (mm)", value=100.0, key="eng_vol_a")
         st.metric("Volume", f"{volume_recipiente(comp, larg, alt):.2f} L")
 
-#------------------------------- APROVEITAMENTO -------------------------------------------
 with tab_aprov:
-    st.markdown("### ✂️ Aproveitamento de chapa + Guilhotina")
+    st.markdown("### ✂️ Aproveitamento de chapa")
     st.caption("Calcule quantas peças cabem na chapa, o peso unitário da peça e o retalho rateado.")
 
     with st.form("form_aprov"):
@@ -1103,12 +1102,6 @@ with tab_aprov:
         c_peca = c6.number_input("Comprimento peça (mm)", value=496.0, key="ap_c_peca")
         qtd_blank = c7.number_input("Qtd peças / blank", min_value=1, value=1, key="ap_qtd_blank")
         
-        st.markdown("**3) Tempo de Guilhotina (Opcional)**")
-        c8, c9, c10 = st.columns(3)
-        pcs_hora_tira = c8.number_input("Peças/hora (cortar tira)", min_value=1, value=360, key="ap_pcs_tira")
-        pcs_hora_peca = c9.number_input("Peças/hora (cortar peça)", min_value=1, value=360, key="ap_pcs_peca")
-        custo_hora = c10.number_input("Custo Hora Guilhotina (R$)", min_value=0.0, value=140.0, key="ap_custo_hora")
-        
         calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
 
     if calc:
@@ -1122,21 +1115,6 @@ with tab_aprov:
         m2.metric("Retalho por Peça", f"{r['retalho_por_peca_kg']:.3f} kg")
         m3.metric("Peças na Chapa", r["total_pecas"])
         m4.metric("Aproveitamento", f"{r['aproveitamento_pct']}%")
-
-        # --- TEMPOS ---
-        if pcs_hora_tira > 0 and pcs_hora_peca > 0:
-            st.markdown("#### Tempos e Custo")
-            tempo_tira = (r["n_tiras"] / pcs_hora_tira) * 60
-            tempo_peca = (r["total_pecas"] / pcs_hora_peca) * 60
-            tempo_total = tempo_tira + tempo_peca
-            custo_total = (tempo_total / 60) * custo_hora
-            custo_peca = custo_total / r["total_pecas"]
-
-            t1, t2, t3, t4 = st.columns(4)
-            t1.metric("Tempo Cortar Tira", f"{tempo_tira:.2f} min")
-            t2.metric("Tempo Cortar Peça", f"{tempo_peca:.2f} min")
-            t3.metric("Custo Total Guilhotina", brl(custo_total))
-            t4.metric("Custo Guilhotina/Peça", brl(custo_peca))
 
         # --- DETALHES ---
         st.markdown("---")
@@ -1165,7 +1143,7 @@ with tab_aprov:
         }
         st.table(pd.DataFrame(detalhes).set_index("Item"))
 
-        # --- RESUMO NARRATIVO (igual à planilha) ---
+        # --- RESUMO NARRATIVO ---
         st.info(
             f"💡 **Resumo:** Nesta peça foi adotado o blank otimizado de **{r['n_tiras']} tiras x {r['n_pecas_por_tira']} peças**, "
             f"totalizando **{r['total_pecas']} peças** por chapa. "
@@ -1174,4 +1152,3 @@ with tab_aprov:
 
         with st.expander("Ver dados brutos (JSON)"):
             st.json(r)
-
