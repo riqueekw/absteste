@@ -977,100 +977,111 @@ with tab_eng:
             "Tubo redondo", "Tubo quadrado", "Tubo retangular",
             "Barra redonda", "Barra quadrada", "Barra sextavada",
             "Chapa circular", "Chapa plástica", "Plástico bolha",
-        ])
+        ], key="eng_tipo_peso")
+
         if tipo == "Tubo redondo":
             c1, c2, c3 = st.columns(3)
-            d = c1.number_input("Diâmetro externo (mm)", value=30.0)
-            e = c2.number_input("Espessura (mm)", value=2.0)
-            L = c3.number_input("Comprimento (mm)", value=1395.0)
+            d = c1.number_input("Diâmetro externo (mm)", value=30.0, key="eng_tr_d")
+            e = c2.number_input("Espessura (mm)", value=2.0, key="eng_tr_e")
+            L = c3.number_input("Comprimento (mm)", value=1395.0, key="eng_tr_L")
             st.metric("Peso", f"{peso_tubo_redondo(d, e, L):.3f} kg")
+
         elif tipo == "Tubo quadrado":
             c1, c2, c3 = st.columns(3)
-            lado = c1.number_input("Lado (mm)", value=30.0)
-            e = c2.number_input("Espessura (mm)", value=3.0)
-            L = c3.number_input("Comprimento (mm)", value=6000.0)
+            lado = c1.number_input("Lado (mm)", value=30.0, key="eng_tq_lado")
+            e = c2.number_input("Espessura (mm)", value=3.0, key="eng_tq_e")
+            L = c3.number_input("Comprimento (mm)", value=6000.0, key="eng_tq_L")
             st.metric("Peso", f"{peso_tubo_quadrado(lado, e, L):.3f} kg")
+
         elif tipo == "Tubo retangular":
             c1, c2, c3, c4 = st.columns(4)
-            b = c1.number_input("Base (mm)", value=30.0)
-            h = c2.number_input("Altura (mm)", value=60.0)
-            e = c3.number_input("Espessura (mm)", value=3.0)
-            L = c4.number_input("Comprimento (mm)", value=6000.0)
+            b = c1.number_input("Base (mm)", value=30.0, key="eng_tret_b")
+            h = c2.number_input("Altura (mm)", value=60.0, key="eng_tret_h")
+            e = c3.number_input("Espessura (mm)", value=3.0, key="eng_tret_e")
+            L = c4.number_input("Comprimento (mm)", value=6000.0, key="eng_tret_L")
             st.metric("Peso", f"{peso_tubo_retangular(b, h, e, L):.3f} kg")
+
         elif tipo == "Barra redonda":
             c1, c2 = st.columns(2)
-            d = c1.number_input("Diâmetro (mm)", value=131.0)
-            L = c2.number_input("Comprimento (mm)", value=24.0)
+            d = c1.number_input("Diâmetro (mm)", value=131.0, key="eng_br_d")
+            L = c2.number_input("Comprimento (mm)", value=24.0, key="eng_br_L")
             st.metric("Peso", f"{peso_barra_redonda(d, L):.3f} kg")
+
         elif tipo == "Barra quadrada":
             c1, c2 = st.columns(2)
-            b = c1.number_input("Base (mm)", value=27.5)
-            L = c2.number_input("Comprimento (mm)", value=48.0)
+            b = c1.number_input("Base (mm)", value=27.5, key="eng_bq_b")
+            L = c2.number_input("Comprimento (mm)", value=48.0, key="eng_bq_L")
             st.metric("Peso", f"{peso_barra_quadrada(b, L):.3f} kg")
+
         elif tipo == "Barra sextavada":
             c1, c2 = st.columns(2)
-            d = c1.number_input("Diâmetro (mm)", value=12.7)
-            L = c2.number_input("Comprimento (mm)", value=1000.0)
+            d = c1.number_input("Diâmetro (mm)", value=12.7, key="eng_bs_d")
+            L = c2.number_input("Comprimento (mm)", value=1000.0, key="eng_bs_L")
             st.metric("Peso", f"{peso_barra_sextavada(d, L):.3f} kg")
+
         elif tipo == "Chapa circular":
             c1, c2 = st.columns(2)
-            d = c1.number_input("Diâmetro (mm)", value=134.0)
-            e = c2.number_input("Espessura (mm)", value=4.0)
+            d = c1.number_input("Diâmetro (mm)", value=134.0, key="eng_cc_d")
+            e = c2.number_input("Espessura (mm)", value=4.0, key="eng_cc_e")
             st.metric("Peso", f"{peso_chapa_circular(d, e):.3f} kg")
+
         elif tipo == "Chapa plástica":
             c1, c2, c3, c4 = st.columns(4)
-            t = c1.selectbox("Tipo", ["ABS", "PEAD", "PP"])
-            e = c2.number_input("Espessura (mm)", value=4.0)
-            w = c3.number_input("Largura (mm)", value=50.0)
-            L = c4.number_input("Comprimento (mm)", value=515.0)
+            t = c1.selectbox("Tipo", ["ABS", "PEAD", "PP"], key="eng_cp_tipo")
+            e = c2.number_input("Espessura (mm)", value=4.0, key="eng_cp_e")
+            w = c3.number_input("Largura (mm)", value=50.0, key="eng_cp_w")
+            L = c4.number_input("Comprimento (mm)", value=515.0, key="eng_cp_L")
             st.metric("Peso", f"{peso_chapa_plastica(e, w, L, t):.3f} kg")
+
         elif tipo == "Plástico bolha":
             c1, c2 = st.columns(2)
-            L = c1.number_input("Comprimento (mm)", value=2853.0)
-            w = c2.number_input("Largura (mm)", value=1500.0)
+            L = c1.number_input("Comprimento (mm)", value=2853.0, key="eng_pb_L")
+            w = c2.number_input("Largura (mm)", value=1500.0, key="eng_pb_w")
             st.metric("Peso", f"{peso_plastico_bolha(L, w):.4f} kg")
 
     with sub_chapa:
         st.markdown("**Desenvolvimento de chapas dobradas**")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        ang = c1.number_input("Ângulo (°)", value=90.0)
-        e = c2.number_input("Espessura (mm)", value=3.0)
-        a = c3.number_input("a (mm)", value=20.0)
-        b = c4.number_input("b (mm)", value=32.0)
-        coef = c5.number_input("Coef.", value=3.0)
-        r = c6.number_input("Raio (mm)", value=6.0)
+        ang = c1.number_input("Ângulo (°)", value=90.0, key="eng_dev_ang")
+        e = c2.number_input("Espessura (mm)", value=3.0, key="eng_dev_e")
+        a = c3.number_input("a (mm)", value=20.0, key="eng_dev_a")
+        b = c4.number_input("b (mm)", value=32.0, key="eng_dev_b")
+        coef = c5.number_input("Coef.", value=3.0, key="eng_dev_coef")
+        r = c6.number_input("Raio (mm)", value=6.0, key="eng_dev_r")
         st.metric("Comprimento necessário", f"{desenvolvimento_chapa(ang, e, a, b, coef, r):.2f} mm")
+
         st.markdown("**Raio médio da dobra**")
         c1, c2 = st.columns(2)
-        rmed = c1.number_input("Raio médio (mm)", value=147.0, key="rmed")
-        ang2 = c2.number_input("Ângulo (°)", value=90.0, key="ang2")
+        rmed = c1.number_input("Raio médio (mm)", value=147.0, key="eng_rmed")
+        ang2 = c2.number_input("Ângulo (°)", value=90.0, key="eng_ang2")
         st.metric("Comprimento da dobra", f"{comprimento_dobra_raio_medio(rmed, ang2):.2f} mm")
 
     with sub_conv:
-        st.markdown("**Ø ↔ Perímetro**")
+        st.markdown("**Ø → Perímetro**")
         c1, c2 = st.columns(2)
-        d = c1.number_input("Diâmetro externo (mm)", value=900.0)
-        e = c2.number_input("Espessura (mm)", value=25.4)
-        res = diametro_para_perimetro(d, e)
-        st.json(res)
+        d = c1.number_input("Diâmetro externo (mm)", value=900.0, key="eng_conv_d")
+        e = c2.number_input("Espessura (mm)", value=25.4, key="eng_conv_e")
+        st.json(diametro_para_perimetro(d, e))
+
         st.markdown("**Perímetro → Ø**")
         c1, c2 = st.columns(2)
-        p = c1.number_input("Perímetro externo (mm)", value=2827.43)
-        e2 = c2.number_input("Espessura (mm)", value=25.4, key="e2")
+        p = c1.number_input("Perímetro externo (mm)", value=2827.43, key="eng_conv_p")
+        e2 = c2.number_input("Espessura (mm)", value=25.4, key="eng_conv_e2")
         st.json(perimetro_para_diametro(p, e2))
 
     with sub_misc:
         st.markdown("**Definir prensa (tonelagem)**")
         c1, c2, c3 = st.columns(3)
-        w = c1.number_input("Largura peça (mm)", value=200.0)
-        L = c2.number_input("Comprimento peça (mm)", value=200.0)
-        e = c3.number_input("Espessura (mm)", value=2.0)
+        w = c1.number_input("Largura peça (mm)", value=200.0, key="eng_pr_w")
+        L = c2.number_input("Comprimento peça (mm)", value=200.0, key="eng_pr_L")
+        e = c3.number_input("Espessura (mm)", value=2.0, key="eng_pr_e")
         st.metric("Prensa necessária", f"{tonelagem_prensa(w, L, e):.1f} Toneladas")
+
         st.markdown("**Volume de recipiente**")
         c1, c2, c3 = st.columns(3)
-        comp = c1.number_input("Comprimento (mm)", value=500.0)
-        larg = c2.number_input("Largura (mm)", value=200.0)
-        alt = c3.number_input("Altura (mm)", value=100.0)
+        comp = c1.number_input("Comprimento (mm)", value=500.0, key="eng_vol_c")
+        larg = c2.number_input("Largura (mm)", value=200.0, key="eng_vol_l")
+        alt = c3.number_input("Altura (mm)", value=100.0, key="eng_vol_a")
         st.metric("Volume", f"{volume_recipiente(comp, larg, alt):.2f} L")
 
 #------------------------------- APROVEITAMENTO -------------------------------------------
@@ -1078,15 +1089,16 @@ with tab_aprov:
     st.markdown("### ✂️ Aproveitamento de chapa + Guilhotina")
     with st.form("form_aprov"):
         c1, c2, c3 = st.columns(3)
-        e_chapa = c1.number_input("Espessura chapa (mm)", value=1.5)
-        l_chapa = c2.number_input("Largura chapa (mm)", value=1000.0)
-        c_chapa = c3.number_input("Comprimento chapa (mm)", value=2810.0)
+        e_chapa = c1.number_input("Espessura chapa (mm)", value=1.5, key="ap_e_chapa")
+        l_chapa = c2.number_input("Largura chapa (mm)", value=1000.0, key="ap_l_chapa")
+        c_chapa = c3.number_input("Comprimento chapa (mm)", value=2810.0, key="ap_c_chapa")
         c4, c5, c6 = st.columns(3)
-        e_peca = c4.number_input("Espessura peça (mm)", value=1.5)
-        l_peca = c5.number_input("Largura peça (mm)", value=453.0)
-        c_peca = c6.number_input("Comprimento peça (mm)", value=496.0)
-        qtd_blank = st.number_input("Qtd peças por blank", min_value=1, value=1)
+        e_peca = c4.number_input("Espessura peça (mm)", value=1.5, key="ap_e_peca")
+        l_peca = c5.number_input("Largura peça (mm)", value=453.0, key="ap_l_peca")
+        c_peca = c6.number_input("Comprimento peça (mm)", value=496.0, key="ap_c_peca")
+        qtd_blank = st.number_input("Qtd peças por blank", min_value=1, value=1, key="ap_qtd_blank")
         calc = st.form_submit_button("Calcular", type="primary")
+
     if calc:
         r = aproveitamento_chapa(e_chapa, l_chapa, c_chapa,
                                  e_peca, l_peca, c_peca, int(qtd_blank))
@@ -1096,6 +1108,5 @@ with tab_aprov:
         m3.metric("Peso da chapa", f"{r['peso_chapa_kg']} kg")
         m4.metric("Retalho", f"{r['retalho_kg']} kg")
         st.json(r)
-
 
 
