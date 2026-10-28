@@ -105,50 +105,67 @@ def volume_recipiente(comprimento_mm, largura_mm, altura_mm):
     return (comprimento_mm / 1000) * (largura_mm / 1000) * (altura_mm / 1000) * 1000  # litros
 
 # ---------------------------------------------------------------------------
-# APROVEITAMENTO DE CHAPA + GUILHOTINA
+# APROVEITAMENTO DE CHAPA + GUILHOTINA (Igual à Planilha)
 # ---------------------------------------------------------------------------
 
 def aproveitamento_chapa(esp_chapa_mm, larg_chapa_mm, comp_chapa_mm,
                          esp_peca_mm, larg_peca_mm, comp_peca_mm,
                          qtd_pecas_por_blank=1):
     """
-    Calcula quantas peças cabem na chapa (modelo 1 e modelo 2) e escolhe o melhor.
-    Retorna dict com quantidades, peso da chapa, peso da peça, retalho.
+    Calcula quantas peças cabem na chapa e fornece o peso individual da peça,
+    o retalho rateado por peça e o percentual de aproveitamento.
     """
-    # peso chapa (kg) = esp * larg * comp * densidade/1000
-    peso_chapa = esp_chapa_mm * larg_chapa_mm * comp_chapa_mm * 7.85 / 1_000_000
+    # Peso da chapa inteira em kg
+    peso_chapa = (esp_chapa_mm * larg_chapa_mm * comp_chapa_mm * 7.85) / 1_000_000
 
-    # Modelo 1: tiras no sentido da largura
+    # --- Modelo 1 (tiras no sentido da largura) ---
     n_tiras_1 = math.floor(larg_chapa_mm / larg_peca_mm)
     n_pecas_tira_1 = math.floor(comp_chapa_mm / comp_peca_mm)
     total_1 = n_tiras_1 * n_pecas_tira_1 * qtd_pecas_por_blank
 
-    # Modelo 2: tiras giradas
+    # --- Modelo 2 (tiras giradas) ---
     n_tiras_2 = math.floor(larg_chapa_mm / comp_peca_mm)
     n_pecas_tira_2 = math.floor(comp_chapa_mm / larg_peca_mm)
     total_2 = n_tiras_2 * n_pecas_tira_2 * qtd_pecas_por_blank
 
     escolhido = "Modelo 1" if total_1 >= total_2 else "Modelo 2"
-    total = max(total_1, total_2)
+    total_pecas = max(total_1, total_2)
 
-    peso_peca = (esp_peca_mm * larg_peca_mm * comp_peca_mm * 7.85 / 1_000_000) / max(total, 1) if total > 0 else 0
+    # Peso de UMA peça (sem a chapa toda)
+    peso_peca = (esp_peca_mm * larg_peca_mm * comp_peca_mm * 7.85) / 1_000_000
 
-    # retalho
+    # Peso total de todas as peças
+    peso_total_pecas = peso_peca * total_pecas
+    
+    # Retalho total da chapa
+    retalho_total = max(peso_chapa - peso_total_pecas, 0)
+    
+    # Retalho rateado por peça
+    retalho_por_peca = retalho_total / total_pecas if total_pecas > 0 else 0
+
+    # Aproveitamento em %
+    aproveitamento = (peso_total_pecas / peso_chapa) * 100 if peso_chapa > 0 else 0
+
+    # Dados do modelo escolhido
     if escolhido == "Modelo 1":
-        retalho = peso_chapa - total * peso_peca * qtd_pecas_por_blank
+        n_tiras, n_pecas = n_tiras_1, n_pecas_tira_1
     else:
-        retalho = peso_chapa - total * peso_peca * qtd_pecas_por_blank
+        n_tiras, n_pecas = n_tiras_2, n_pecas_tira_2
 
     return {
         "escolhido": escolhido,
         "total_1": total_1,
         "total_2": total_2,
-        "total_pecas": total,
+        "total_pecas": total_pecas,
         "peso_chapa_kg": round(peso_chapa, 3),
         "peso_peca_kg": round(peso_peca, 3),
-        "retalho_kg": round(max(retalho, 0), 3),
-        "n_tiras_1": n_tiras_1, "n_pecas_tira_1": n_pecas_tira_1,
-        "n_tiras_2": n_tiras_2, "n_pecas_tira_2": n_pecas_tira_2,
+        "peso_total_pecas_kg": round(peso_total_pecas, 3),
+        "retalho_total_kg": round(retalho_total, 3),
+        "retalho_por_peca_kg": round(retalho_por_peca, 3),
+        "aproveitamento_pct": round(aproveitamento, 2),
+        "n_tiras": n_tiras,
+        "n_pecas_por_tira": n_pecas,
+        "qtd_pecas_por_blank": qtd_pecas_por_blank
     }
 
 # ---------------------------------------------------------------------------
