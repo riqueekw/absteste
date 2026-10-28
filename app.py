@@ -1,8 +1,6 @@
 # =============================================================================
-# ORÇAMENTO ABS — Calculadora de termoformagem + custo de montagem
-# Executar: streamlit run app.py
-# Dependências: streamlit, pandas, openpyxl
-# Mantenha app.py e orcamentos.xlsx na mesma pasta.
+# ORÇAMENTO ABS - Calculadora de Termoformagem (versão Streamlit)
+# Rodar com:  streamlit run app.py
 # =============================================================================
 
 import math
@@ -10,286 +8,409 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 
+# O arquivo fica na mesma pasta do app.py
 ARQUIVO = Path(__file__).parent / "orcamentos.xlsx"
-CORES = sorted(["EVO1", "EVO2", "EVO4", "ECO1", "ECO2", "ECO3", "PRETO", "BLACK PIANO", "BRANCO GEADA"])
-POLIMEROS = {"ABS-s": ("ABS", 1.06), "ABS-PMMA": ("ABS-PMMA", 1.18), "ABS-TPE": ("ABS-TPE", 1.11)}
+
+CORES = sorted([
+    "EVO1", "EVO2", "EVO4",
+    "ECO1", "ECO2", "ECO3",
+    "PRETO", "BLACK PIANO", "BRANCO GEADA",
+])
+
+POLIMEROS = {
+    "ABS-s": ("ABS", 1.06),
+    "ABS-PMMA": ("ABS-PMMA", 1.18),
+    "ABS-TPE": ("ABS-TPE", 1.11),
+}
+
 CHAPA_COMPRIMENTO_M = 2.7
 CHAPA_LARGURA_M = 1.7
 
-COLUNAS = [
-    "Código Item", "Polímero", "Cor", "Tipo Corte", "Conceito", "Blank (mm)",
-    "Peso Líquido (kg)", "Peso Bruto (kg)", "Qtd Peças/Chapa", "Tempo Termo (min)",
-    "Tempo Prep (min)", "Tempo Destacar (min)", "Tempo Recortar (min)",
-    "Tempo Acabamento (min)", "Custo Recorte (R$)", "Custo Total (R$)",
-    "Custo Montagem (R$)", "Custo Geral (R$)"
-]
+
+# -----------------------------------------------------------------------------
+# REGRAS DE NEGÓCIO (idênticas ao código do Colab)
+# -----------------------------------------------------------------------------
+
+def tipo_conceito_params(conceito: str):
+    """Retorna (cto_mm, adicional) conforme o conceito de fabricação."""
+    if conceito == "Mesa":
+        return 200, 0.3
+    return 100, 0.0  # Caixa
 
 
-def parametros_conceito(conceito):
-    return (200, 0.3) if conceito == "Mesa" else (100, 0.0)
-
-
-def calcular_peso_bruto(comprimento, largura, cto, espessura, densidade, adicional):
-    return ((comprimento + cto) * (largura + cto) * espessura * densidade * (1 + adicional)) / 1_000_000
+def calcular_peso_bruto(comprimento, largura, cto, espessura, densidade, adc):
+    return ((comprimento + cto) * (largura + cto) * espessura * densidade * (1 + adc)) / 1_000_000
 
 
 def calcular_perimetro(comprimento, largura, cto):
-    comp, larg = (comprimento + cto) / 1000, (largura + cto) / 1000
-    return comp, larg, 2 * comp + 2 * larg
+    comp = (comprimento + cto) / 1000
+    lng = (largura + cto) / 1000
+    perimetro = (2 * comp) + (2 * lng)
+    return comp, lng, perimetro
 
 
-def quantidade_pecas(comp, larg):
-    q1 = math.floor(CHAPA_COMPRIMENTO_M / comp) * math.floor(CHAPA_LARGURA_M / larg)
-    q2 = math.floor(CHAPA_COMPRIMENTO_M / larg) * math.floor(CHAPA_LARGURA_M / comp)
-    return max(q1, q2)
+def quantidade_pecas(comp, lng):
+    qtd1 = math.floor(CHAPA_COMPRIMENTO_M / comp) * math.floor(CHAPA_LARGURA_M / lng)
+    qtd2 = math.floor(CHAPA_COMPRIMENTO_M / lng) * math.floor(CHAPA_LARGURA_M / comp)
+    return max(qtd1, qtd2)
 
 
-def calcular_orcamento(cod_item, comprimento, largura, espessura, cor, peso_liquido, polimero_label, tipo_corte, conceito):
-    polimero, densidade = POLIMEROS[polimero_label]
-    cto, adicional = parametros_conceito(conceito)
-    blank_comp, blank_larg = comprimento + cto, largura + cto
-    peso_bruto = calcular_peso_bruto(comprimento, largura, cto, espessura, densidade, adicional)
-    comp, larg, perimetro = calcular_perimetro(comprimento, largura, cto)
-    qtd = quantidade_pecas(comp, larg)
+def calcular_termoformagem(comp, lng):
+    qtd = quantidade_pecas(comp, lng)
     if qtd <= 0:
-        raise ValueError("Não é possível encaixar nenhuma peça na chapa com essas medidas.")
-    tempo_termo = 5.75 / qtd
-    tempo_prep = tempo_termo * 0.1
-    tempo_destacar = perimetro * 0.25
-    tempo_recortar = perimetro * 0.5
-    tempo_acabamento = perimetro * 0.9
-    custos = {
-        "Termoformagem": (tempo_termo * 252) / 60,
-        "Preparação": (tempo_prep * 105) / 60,
-        "Destacar": (tempo_destacar * 105) / 60,
-        "Recortar": (tempo_recortar * 105) / 60,
-        "Acabamento": (tempo_acabamento * 105) / 60,
-    }
-    total = sum(custos.values())
+        raise ValueError(
+            "Não é possível encaixar nenhuma peça na chapa com essas medidas."
+        )
+    termo = 5.75 / qtd
+    custo_termo = (termo * 252) / 60
+    return termo, custo_termo, qtd
+
+
+def calcular_preparacao(termo):
+    prep = termo * 0.1
+    return prep, (prep * 105) / 60
+
+
+def calcular_destacar(perimetro):
+    destacar = perimetro * 0.25
+    return destacar, (destacar * 105) / 60
+
+
+def calcular_recortar(perimetro):
+    recortar = perimetro * 0.5
+    return recortar, (recortar * 105) / 60
+
+
+def calcular_acabamento(perimetro):
+    acabamento = perimetro * 0.9
+    return acabamento, (acabamento * 105) / 60
+
+
+def calcular_orcamento(cod_item, comprimento, largura, espessura, cor,
+                       peso_liquido, polimero_label, tipo_corte, conceito):
+    """Executa toda a cadeia de cálculo e devolve (item para salvar, custo por etapa)."""
+    polimero, densidade = POLIMEROS[polimero_label]
+    cto, adc = tipo_conceito_params(conceito)
+
+    comprimento_blank = comprimento + cto
+    largura_blank = largura + cto
+
+    peso_bruto = calcular_peso_bruto(comprimento, largura, cto, espessura, densidade, adc)
+    comp, lng, perimetro = calcular_perimetro(comprimento, largura, cto)
+    termo, custo_termo, qtd_pecas = calcular_termoformagem(comp, lng)
+    prep, custo_prep = calcular_preparacao(termo)
+    destacar, custo_destacar = calcular_destacar(perimetro)
+    recortar, custo_recortar = calcular_recortar(perimetro)
+    acabamento, custo_acabamento = calcular_acabamento(perimetro)
+
+    custo_total = (custo_termo + custo_prep + custo_destacar
+                   + custo_recortar + custo_acabamento)
+
     item = {
-        "Código Item": str(cod_item).strip(), "Polímero": polimero, "Cor": cor,
-        "Tipo Corte": tipo_corte, "Conceito": conceito,
-        "Blank (mm)": f"{blank_comp} x {blank_larg}",
-        "Peso Líquido (kg)": round(float(peso_liquido), 3), "Peso Bruto (kg)": round(peso_bruto, 3),
-        "Qtd Peças/Chapa": qtd, "Tempo Termo (min)": round(tempo_termo, 2),
-        "Tempo Prep (min)": round(tempo_prep, 2), "Tempo Destacar (min)": round(tempo_destacar, 2),
-        "Tempo Recortar (min)": round(tempo_recortar, 2), "Tempo Acabamento (min)": round(tempo_acabamento, 2),
-        "Custo Recorte (R$)": round(custos["Recortar"], 2), "Custo Total (R$)": round(total, 2),
-        "Custo Montagem (R$)": 0.0, "Custo Geral (R$)": round(total, 2),
+        "Código Item": cod_item,
+        "Polímero": polimero,
+        "Cor": cor,
+        "Tipo Corte": tipo_corte,
+        "Conceito": conceito,
+        "Blank (mm)": f"{comprimento_blank} x {largura_blank}",
+        "Peso Líquido (kg)": round(peso_liquido, 3),
+        "Peso Bruto (kg)": round(peso_bruto, 3),
+        "Qtd Peças/Chapa": qtd_pecas,
+        "Tempo Termo (min)": round(termo, 2),
+        "Tempo Prep (min)": round(prep, 2),
+        "Tempo Destacar (min)": round(destacar, 2),
+        "Tempo Recortar (min)": round(recortar, 2),
+        "Tempo Acabamento (min)": round(acabamento, 2),
+        "Custo Recorte (R$)": round(custo_recortar, 2),
+        "Custo Total (R$)": round(custo_total, 2),
     }
-    return item, {k: round(v, 2) for k, v in custos.items()}
+    custos = {
+        "Termoformagem": round(custo_termo, 2),
+        "Preparação": round(custo_prep, 2),
+        "Destacar": round(custo_destacar, 2),
+        "Recortar": round(custo_recortar, 2),
+        "Acabamento": round(custo_acabamento, 2),
+    }
+    return item, custos
 
 
-def brl(valor):
-    return "R$ " + f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def garantir_arquivo():
-    if not ARQUIVO.exists():
-        with pd.ExcelWriter(ARQUIVO, engine="openpyxl") as writer:
-            pd.DataFrame(columns=COLUNAS).to_excel(writer, sheet_name="Orçamentos", index=False)
-            pd.DataFrame(columns=["Código Item", "Custo Montagem (R$)"]).to_excel(writer, sheet_name="Montagem", index=False)
-    wb = load_workbook(ARQUIVO)
-    if "Orçamentos" not in wb.sheetnames:
-        ws = wb.create_sheet("Orçamentos", 0)
-        ws.append(COLUNAS)
-    ws = wb["Orçamentos"]
-    headers = [c.value for c in ws[1]]
-    for col in COLUNAS:
-        if col not in headers:
-            ws.cell(row=1, column=len(headers) + 1, value=col)
-            headers.append(col)
-    if "Montagem" not in wb.sheetnames:
-        wsm = wb.create_sheet("Montagem")
-        wsm.append(["Código Item", "Custo Montagem (R$)"])
-    wb.save(ARQUIVO)
-    formatar_planilha()
-
+# -----------------------------------------------------------------------------
+# PERSISTÊNCIA (Excel)
+# -----------------------------------------------------------------------------
 
 def carregar_df():
-    garantir_arquivo()
-    df = pd.read_excel(ARQUIVO, sheet_name="Orçamentos", dtype={"Código Item": str})
-    for c in COLUNAS:
-        if c not in df.columns:
-            df[c] = 0 if "Custo" in c else ""
-    df["Custo Montagem (R$)"] = pd.to_numeric(df["Custo Montagem (R$)"], errors="coerce").fillna(0)
-    df["Custo Total (R$)"] = pd.to_numeric(df["Custo Total (R$)"], errors="coerce").fillna(0)
-    df["Custo Geral (R$)"] = df["Custo Total (R$)"] + df["Custo Montagem (R$)"]
-    return df[COLUNAS]
+    if ARQUIVO.exists():
+        return pd.read_excel(ARQUIVO)
+    return pd.DataFrame()
 
 
-def salvar_df(df):
-    with pd.ExcelWriter(ARQUIVO, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        df[COLUNAS].to_excel(writer, sheet_name="Orçamentos", index=False)
-    formatar_planilha()
+def codigo_existe(df, cod_item):
+    if df.empty or "Código Item" not in df.columns:
+        return False
+    return cod_item in df["Código Item"].astype(str).values
 
 
-def salvar_item(item):
+def salvar_item(novo_item):
     df = carregar_df()
-    if item["Código Item"] in df["Código Item"].astype(str).values:
-        raise ValueError("Esse código já está cadastrado. Use a aba Montagem para atualizar somente a montagem.")
-    df = pd.concat([df, pd.DataFrame([item])], ignore_index=True)
-    salvar_df(df)
+    df = pd.concat([df, pd.DataFrame([novo_item])], ignore_index=True)
+    df.to_excel(ARQUIVO, index=False)
+    formatar_planilha(ARQUIVO, df)
+    return df
 
 
-def salvar_montagem(codigo, valor):
+COLUNAS_MOEDA = {"Custo Recorte (R$)", "Custo Total (R$)"}
+COLUNAS_DECIMAL = {
+    "Peso Líquido (kg)", "Peso Bruto (kg)",
+    "Tempo Termo (min)", "Tempo Prep (min)", "Tempo Destacar (min)",
+    "Tempo Recortar (min)", "Tempo Acabamento (min)",
+}
+
+
+def formatar_planilha(caminho, df):
+    """Aplica formatação profissional (cabeçalho, cores, larguras, moeda, filtro)."""
+    from openpyxl import load_workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = load_workbook(caminho)
+    ws = wb.active
+    ws.title = "Orçamentos"
+
+    n_linhas = ws.max_row
+    n_colunas = ws.max_column
+
+    fonte_padrao = Font(name="Calibri", size=11)
+    for linha in ws.iter_rows(min_row=1, max_row=n_linhas, max_col=n_colunas):
+        for celula in linha:
+            celula.font = fonte_padrao
+
+    fundo_cabecalho = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    fonte_cabecalho = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    for celula in ws[1]:
+        celula.fill = fundo_cabecalho
+        celula.font = fonte_cabecalho
+        celula.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[1].height = 30
+
+    borda = Border(*(Side(style="thin", color="D9D9D9"),) * 4)
+    for linha in ws.iter_rows(min_row=1, max_row=n_linhas, max_col=n_colunas):
+        for celula in linha:
+            celula.border = borda
+
+    fundo_zebra = PatternFill(start_color="F2F6FA", end_color="F2F6FA", fill_type="solid")
+    colunas = list(df.columns)
+    for idx_linha in range(2, n_linhas + 1):
+        if idx_linha % 2 == 0:
+            for celula in ws[idx_linha]:
+                celula.fill = fundo_zebra
+        for idx_col, nome_col in enumerate(colunas, start=1):
+            celula = ws.cell(row=idx_linha, column=idx_col)
+            if nome_col in COLUNAS_MOEDA:
+                celula.number_format = 'R$ #,##0.00'
+            elif nome_col in COLUNAS_DECIMAL:
+                celula.number_format = '0.00'
+            if idx_col > 1:
+                celula.alignment = Alignment(horizontal="center")
+
+    for idx_col, nome_col in enumerate(colunas, start=1):
+        maior = len(str(nome_col))
+        for idx_linha in range(2, n_linhas + 1):
+            valor = ws.cell(row=idx_linha, column=idx_col).value
+            maior = max(maior, len(str(valor)) if valor is not None else 0)
+        ws.column_dimensions[get_column_letter(idx_col)].width = min(maior + 4, 32)
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    wb.save(caminho)
+
+
+# -----------------------------------------------------------------------------
+# INTERFACE (Streamlit)
+# -----------------------------------------------------------------------------
+
+def brl(valor):
+    """Formata número como moeda brasileira: R$ 1.234,56"""
+    return "R$ " + f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def excluir_item(cod_item):
     df = carregar_df()
-    mask = df["Código Item"].astype(str) == str(codigo)
-    if not mask.any():
-        raise ValueError("Código não encontrado no histórico. Salve primeiro o orçamento do item.")
-    df.loc[mask, "Custo Montagem (R$)"] = round(float(valor), 2)
-    df.loc[mask, "Custo Geral (R$)"] = df.loc[mask, "Custo Total (R$)"] + round(float(valor), 2)
-    salvar_df(df)
-
-
-def excluir_item(codigo):
-    df = carregar_df()
-    salvar_df(df[df["Código Item"].astype(str) != str(codigo)].reset_index(drop=True))
-
-
-def formatar_planilha():
-    wb = load_workbook(ARQUIVO)
-    for ws in wb.worksheets:
-        ws.freeze_panes = "A2"
-        ws.auto_filter.ref = ws.dimensions
-        for cell in ws[1]:
-            cell.fill = PatternFill("solid", fgColor="1F4E78")
-            cell.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 30
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
-                cell.font = Font(name="Calibri", size=11)
-                cell.border = Border(*(Side(style="thin", color="D9D9D9"),) * 4)
-                if cell.row % 2 == 0:
-                    cell.fill = PatternFill("solid", fgColor="F2F6FA")
-        for col_idx in range(1, ws.max_column + 1):
-            name = str(ws.cell(1, col_idx).value or "")
-            vals = [len(str(ws.cell(r, col_idx).value or "")) for r in range(1, min(ws.max_row, 100) + 1)]
-            ws.column_dimensions[get_column_letter(col_idx)].width = min(max(vals + [12]) + 3, 32)
-            if "(R$)" in name:
-                for r in range(2, ws.max_row + 1):
-                    ws.cell(r, col_idx).number_format = 'R$ #,##0.00'
-            elif "(kg)" in name or "(min)" in name:
-                for r in range(2, ws.max_row + 1):
-                    ws.cell(r, col_idx).number_format = '0.00'
-    wb.save(ARQUIVO)
+    df = df[df["Código Item"].astype(str) != str(cod_item)]
+    df.to_excel(ARQUIVO, index=False)
+    formatar_planilha(ARQUIVO, df)
 
 
 st.set_page_config(page_title="Orçamento ABS", page_icon="🧮", layout="wide")
-st.markdown("""<style>
-.block-container {padding-top: 1.5rem; max-width: 1400px;}
-[data-testid="stMetric"] {background: rgba(128,128,128,.08); border: 1px solid rgba(128,128,128,.2); border-radius: 10px; padding: 12px 16px;}
-</style>""", unsafe_allow_html=True)
 
-st.title("🧮 Orçamento ABS")
-st.caption("Preencha os dados para calcular o custo de termoformagem; informe a montagem em uma aba separada.")
-garantir_arquivo()
-tab_calc, tab_montagem, tab_hist = st.tabs(["Novo orçamento", "Custo de montagem", "Histórico"])
+st.markdown("""
+<style>
+.block-container {padding-top: 2.5rem; max-width: 1200px;}
+[data-testid="stMetric"] {
+    background: rgba(128,128,128,0.08);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+}
+[data-testid="stMetricLabel"] {opacity: 0.75;}
+</style>
+""", unsafe_allow_html=True)
 
-with tab_calc:
-    left, right = st.columns([1.05, 1], gap="large")
-    with left:
-        with st.form("form_orcamento"):
-            st.subheader("1. Identificação")
-            cod = st.text_input("Código do item", placeholder="Ex.: 13437033")
-            st.subheader("2. Dimensões (mm)")
-            a, b, c = st.columns(3)
-            comprimento = a.number_input("Comprimento", min_value=1, max_value=2700, value=1000, step=1)
-            largura = b.number_input("Largura", min_value=1, max_value=1700, value=1000, step=1)
-            espessura = c.number_input("Espessura", min_value=3.0, max_value=7.0, value=3.0, step=0.1, format="%.1f")
-            st.subheader("3. Material")
-            a, b, c = st.columns(3)
-            cor = a.selectbox("Cor", CORES)
-            polimero = b.selectbox("Polímero", list(POLIMEROS.keys()))
-            peso_liquido = c.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0, value=1.0, step=0.1, format="%.3f")
-            st.subheader("4. Processo")
-            a, b = st.columns(2)
-            corte = a.selectbox("Tipo de corte", ["Corte Robô", "Corte Manual"])
-            conceito = b.radio("Conceito", ["Mesa", "Caixa"], horizontal=True)
-            submitted = st.form_submit_button("Calcular e salvar orçamento", type="primary", use_container_width=True)
-    params = dict(cod_item=cod.strip() or "Prévia", comprimento=comprimento, largura=largura, espessura=espessura,
-                  cor=cor, peso_liquido=peso_liquido, polimero_label=polimero, tipo_corte=corte, conceito=conceito)
-    try:
-        preview, costs = calcular_orcamento(**params)
-        with right:
-            st.subheader("Resultado estimado")
-            m1, m2 = st.columns(2)
-            m1.metric("Custo de termoformagem", brl(preview["Custo Total (R$)"]))
-            m2.metric("Peças por chapa", preview["Qtd Peças/Chapa"])
-            m1, m2 = st.columns(2)
-            m1.metric("Peso bruto", f'{preview["Peso Bruto (kg)"]:.3f} kg'.replace(".", ","))
-            m2.metric("Blank", preview["Blank (mm)"])
-            st.markdown("**Composição do custo**")
-            st.dataframe(pd.DataFrame([{"Etapa": k, "Custo": brl(v)} for k, v in costs.items()]), hide_index=True, use_container_width=True)
-            with st.expander("Ver dados calculados"):
-                st.dataframe(pd.DataFrame({"Campo": list(preview.keys()), "Valor": [str(v) for v in preview.values()]}), hide_index=True, use_container_width=True)
-    except Exception as e:
-        preview = None
-        with right:
+DEFAULTS = {
+    "cod": "",
+    "comprimento": 1000,
+    "largura": 1000,
+    "espessura": 3.0,
+    "cor": CORES[0],
+    "peso_liquido": 1.0,
+    "polimero": list(POLIMEROS.keys())[0],
+    "corte": "Corte Robô",
+    "conceito": "Mesa",
+}
+
+for chave, valor in DEFAULTS.items():
+    st.session_state.setdefault(chave, valor)
+
+
+def resetar_formulario():
+    for chave, valor in DEFAULTS.items():
+        st.session_state[chave] = valor
+
+
+def ler_parametros():
+    s = st.session_state
+    return dict(
+        cod_item=s["cod"].strip(),
+        comprimento=s["comprimento"],
+        largura=s["largura"],
+        espessura=s["espessura"],
+        cor=s["cor"],
+        peso_liquido=s["peso_liquido"],
+        polimero_label=s["polimero"],
+        tipo_corte=s["corte"],
+        conceito=s["conceito"],
+    )
+
+
+st.markdown("## 🧮 Orçamento ABS")
+st.caption("Calculadora de peças termoformadas")
+
+tab_novo, tab_hist = st.tabs(["Novo orçamento", "Histórico"])
+
+# ------------------------------- NOVO ORÇAMENTO ------------------------------
+with tab_novo:
+    col_form, col_prev = st.columns([1.1, 1], gap="large")
+
+    # ----- Formulário -----
+    with col_form:
+        with st.container(border=True):
+            st.markdown("**Identificação**")
+            st.text_input("Código do item", key="cod", placeholder="Código único do item")
+
+        with st.container(border=True):
+            st.markdown("**Dimensões**")
+            c1, c2, c3 = st.columns(3)
+            c1.number_input("Comprimento (mm)", min_value=1, max_value=2700, step=1,
+                            key="comprimento")
+            c2.number_input("Largura (mm)", min_value=1, max_value=1700, step=1,
+                            key="largura")
+            c3.number_input("Espessura (mm)", min_value=3.0, max_value=7.0, step=0.1,
+                            format="%.1f", key="espessura")
+
+        with st.container(border=True):
+            st.markdown("**Material**")
+            c4, c5, c6 = st.columns(3)
+            c4.selectbox("Cor", CORES, key="cor")
+            c5.selectbox("Polímero", list(POLIMEROS.keys()), key="polimero")
+            c6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0,
+                            step=0.1, format="%.3f", key="peso_liquido")
+
+        with st.container(border=True):
+            st.markdown("**Processo**")
+            c7, c8 = st.columns(2)
+            c7.radio("Tipo de corte", ["Corte Robô", "Corte Manual"], key="corte",
+                     horizontal=True)
+            c8.radio("Conceito", ["Mesa", "Caixa"], key="conceito", horizontal=True)
+
+        b1, b2, _ = st.columns([1.3, 1, 1.5])
+        salvar = b1.button("💾 Salvar orçamento", type="primary")
+        b2.button("Limpar", on_click=resetar_formulario)
+
+        if salvar:
+            params = ler_parametros()
+            if not params["cod_item"]:
+                st.warning("Informe o código do item.")
+            elif codigo_existe(carregar_df(), params["cod_item"]):
+                st.warning(f"Código **{params['cod_item']}** já cadastrado. Use outro código.")
+            else:
+                try:
+                    item, _ = calcular_orcamento(**params)
+                    salvar_item(item)
+                    st.toast(f"Orçamento {params['cod_item']} salvo!", icon="✅")
+                    st.success(
+                        f"Orçamento **{params['cod_item']}** salvo: "
+                        f"{brl(item['Custo Total (R$)'])}"
+                    )
+                except PermissionError:
+                    st.error("Não consegui salvar: feche o orcamentos.xlsx no Excel e tente de novo.")
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
+
+    # ----- Prévia ao vivo -----
+    with col_prev:
+        st.markdown("**Prévia do cálculo**")
+        try:
+            prev, custos = calcular_orcamento(**ler_parametros())
+        except Exception as e:
+            prev = None
             st.warning(str(e))
-    if submitted:
-        if not cod.strip():
-            st.error("Informe o código do item antes de salvar.")
-        elif cod.strip() in carregar_df()["Código Item"].astype(str).values:
-            st.error("Esse código já existe. Para alterar o custo de montagem, use a aba Custo de montagem.")
-        else:
-            try:
-                item, _ = calcular_orcamento(**params)
-                salvar_item(item)
-                st.success(f'Orçamento salvo para {cod.strip()}. Custo de termoformagem: {brl(item["Custo Total (R$)"])}')
-            except Exception as e:
-                st.error(f"Não foi possível salvar: {e}")
 
-with tab_montagem:
-    st.subheader("Custo de montagem")
-    st.caption("Informe apenas o custo de montagem. O sistema soma esse valor ao custo de termoformagem do item.")
-    df = carregar_df()
-    if df.empty:
-        st.info("Cadastre primeiro um item na aba Novo orçamento.")
-    else:
-        codigos = df["Código Item"].astype(str).tolist()
-        codigo = st.selectbox("Código do item", codigos, key="codigo_montagem")
-        linha = df[df["Código Item"].astype(str) == codigo].iloc[0]
-        a, b, c = st.columns(3)
-        a.metric("Custo de termoformagem", brl(linha["Custo Total (R$)"]))
-        b.metric("Montagem atual", brl(linha["Custo Montagem (R$)"]))
-        c.metric("Custo geral atual", brl(linha["Custo Geral (R$)"]))
-        with st.form("form_montagem"):
-            valor = st.number_input("Valor de montagem (R$)", min_value=0.0, value=float(linha["Custo Montagem (R$)"]), step=1.0, format="%.2f")
-            salvar_montagem_btn = st.form_submit_button("Salvar custo de montagem", type="primary")
-        if salvar_montagem_btn:
-            try:
-                salvar_montagem(codigo, valor)
-                st.success(f"Montagem atualizada. Custo geral: {brl(float(linha['Custo Total (R$)']) + valor)}")
-                st.rerun()
-            except Exception as e:
-                st.error(str(e))
+        if prev:
+            m1, m2 = st.columns(2)
+            m1.metric("Custo total", brl(prev["Custo Total (R$)"]))
+            m2.metric("Peças por chapa", prev["Qtd Peças/Chapa"])
+            m3, m4 = st.columns(2)
+            m3.metric("Peso bruto", f"{prev['Peso Bruto (kg)']:.3f} kg".replace(".", ","))
+            m4.metric("Blank (mm)", prev["Blank (mm)"])
 
+            st.markdown("**Custo por etapa (R$)**")
+            df_custos = pd.DataFrame(
+                {"Etapa": list(custos.keys()), "Custo (R$)": list(custos.values())}
+            ).set_index("Etapa")
+            st.bar_chart(df_custos)
+
+            with st.expander("Ver todos os campos"):
+                detalhe = pd.DataFrame(
+                    [(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"]
+                )
+                st.table(detalhe.set_index("Campo"))
+
+# --------------------------------- HISTÓRICO ---------------------------------
 with tab_hist:
-    df = carregar_df()
-    if df.empty:
-        st.info("Nenhum orçamento cadastrado ainda.")
+    df_salvo = carregar_df()
+    if df_salvo.empty:
+        st.info("Nenhum orçamento salvo ainda.")
     else:
-        a, b, c, d = st.columns(4)
-        a.metric("Itens cadastrados", len(df))
-        b.metric("Média termoformagem", brl(df["Custo Total (R$)"].mean()))
-        c.metric("Total de montagem", brl(df["Custo Montagem (R$)"].sum()))
-        d.metric("Maior custo geral", brl(df["Custo Geral (R$)"].max()))
-        busca = st.text_input("Buscar por código, cor, polímero ou conceito")
-        filtrado = df
-        if busca.strip():
-            mask = filtrado.astype(str).apply(lambda col: col.str.contains(busca.strip(), case=False, na=False)).any(axis=1)
-            filtrado = filtrado[mask]
-        st.dataframe(filtrado, hide_index=True, use_container_width=True)
-        st.download_button("Baixar histórico em Excel", data=ARQUIVO.read_bytes(), file_name="orcamentos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        with st.expander("Excluir item do histórico"):
-            apagar = st.selectbox("Selecione o código", df["Código Item"].astype(str).tolist(), key="excluir_codigo")
-            if st.button("Excluir item", type="secondary"):
-                excluir_item(apagar)
-                st.success(f"Item {apagar} excluído.")
-                st.rerun()
+        h1, h2, h3 = st.columns(3)
+        h1.metric("Orçamentos salvos", len(df_salvo))
+        h2.metric("Custo médio", brl(df_salvo["Custo Total (R$)"].mean()))
+        h3.metric("Maior custo", brl(df_salvo["Custo Total (R$)"].max()))
+
+        st.dataframe(df_salvo, hide_index=True)
+
+        st.download_button(
+            "⬇️ Baixar planilha (.xlsx)",
+            data=ARQUIVO.read_bytes(),
+            file_name="orcamentos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        with st.expander("Excluir um orçamento"):
+            cod_del = st.selectbox("Código do item", df_salvo["Código Item"].astype(str).tolist())
+            if st.button("Excluir"):
+                try:
+                    excluir_item(cod_del)
+                    st.rerun()
+                except PermissionError:
+                    st.error("Feche o orcamentos.xlsx no Excel e tente de novo.")
