@@ -675,6 +675,7 @@ tab_novo, tab_hist, tab_reforco, tab_montagem, tab_pintura, \
 with tab_novo:
     col_form, col_prev = st.columns([1.1, 1], gap="large")
 
+    # ----- Formulário -----
     with col_form:
         with st.container(border=True):
             st.markdown("**Identificação**")
@@ -709,7 +710,7 @@ with tab_novo:
             if not params["cod_item"]:
                 st.warning("Informe o código do item.")
             elif codigo_existe(carregar_df(), params["cod_item"]):
-                st.warning(f"Código **{params['cod_item']}** já cadastrado.")
+                st.warning(f"Código **{params['cod_item']}** já cadastrado. Use outro código.")
             else:
                 try:
                     item, _ = calcular_orcamento(**params)
@@ -717,11 +718,12 @@ with tab_novo:
                     st.toast(f"Orçamento {params['cod_item']} salvo!", icon="✅")
                     st.success(f"Orçamento **{params['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
                 except PermissionError:
-                    st.error("Feche o orcamentos.xlsx no Excel e tente de novo.")
+                    st.error("Não consegui salvar: feche o orcamentos.xlsx no Excel e tente de novo.")
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-       with col_prev:
+    # ----- Prévia ao vivo -----
+    with col_prev:
         st.markdown("**Prévia do cálculo**")
         params = ler_parametros()
         try:
@@ -756,7 +758,7 @@ with tab_novo:
                 st.error(erro_chapa)
             else:
                 cod, dim, esp, cor = chapa_info
-                st.success(f"**Código:** {cod}")
+                st.success(f"**Código da Chapa:** {cod}")
                 st.info(f"**Dimensão:** {dim[0]} x {dim[1]} mm\n\n"
                         f"**Espessura:** {esp} mm | **Cor:** {cor}")
 
@@ -768,7 +770,7 @@ with tab_novo:
             with st.expander("Ver todos os campos do cálculo"):
                 detalhe = pd.DataFrame([(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"])
                 st.table(detalhe.set_index("Campo"))
-
+                
 # --------------------------------- HISTÓRICO ---------------------------------
 with tab_hist:
     df_salvo = carregar_df()
