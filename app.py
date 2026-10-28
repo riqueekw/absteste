@@ -36,9 +36,79 @@ POLIMEROS = {
     "ABS-TPE": ("ABS-TPE", 1.11),
 }
 
+# Lista de Chapas Padrão (Código, Dimensão (L x C), Espessura, Cor)
+CHAPAS_DB = [
+    ("105751000", (2700, 1700), 4.0, "EVO2"),
+    ("105753000", (2700, 1700), 4.0, "EVO4"),
+    ("105310000", (2400, 1600), 4.0, "EVO2"),
+    ("105309000", (2400, 1600), 4.0, "EVO4"),
+    ("105624000", (1200, 1600), 4.0, "EVO1"),
+    ("106230000", (2400, 1600), 4.0, "ECO3"),
+    ("106237000", (2400, 1600), 4.0, "ECO2"),
+    ("105397000", (1600, 1200), 5.75, "PRETO"),
+    ("105395000", (1600, 1200), 4.0, "PRETO"),
+    ("106271000", (1600, 1200), 4.0, "ECO2"),
+    ("105527000", (2400, 1600), 4.0, "EVO1"),
+    ("106235000", (1500, 2100), 6.5, "ECO3"),
+    ("106290000", (1200, 1600), 4.0, "ECO1"),
+    ("105905000", (1200, 1400), 4.5, "BRANCO GEADA"),
+    ("105909000", (800, 850), 4.0, "PRETO"),
+    ("105308000", (1600, 1200), 4.0, "EVO2"),
+    ("105307000", (1600, 1200), 4.0, "EVO4"),
+    ("105904000", (1600, 1200), 4.5, "BRANCO GEADA"),
+    ("107439000", (2100, 1100), 6.0, "EVO4"),
+    ("105556000", (2700, 1400), 5.75, "EVO1"),
+    ("106297000", (2200, 1050), 4.0, "EVO2"),
+    ("106292000", (2700, 1700), 4.0, "PRETO"),
+    ("105398000", (2270, 1600), 5.75, "PRETO"),
+    ("106419000", (3610, 1930), 6.0, "PRETO"),
+    ("105782000", (2700, 1400), 5.75, "EVO1"),
+    ("106278000", (2700, 1700), 4.0, "ECO1"),
+    ("106279000", (2700, 1700), 5.75, "ECO1"),
+    ("106291000", (2700, 1700), 6.0, "ECO1"),
+    ("106280000", (2700, 1700), 4.0, "ECO2"),
+    ("106281000", (2700, 1700), 5.75, "ECO2"),
+    ("106299000", (1600, 1200), 6.5, "ECO3"),
+    ("106294000", (1600, 1200), 4.0, "ECO3"),
+    ("106283000", (2700, 1700), 5.75, "ECO3"),
+    ("106235000", (2100, 1500), 6.5, "ECO3"),
+    ("106282000", (2700, 1700), 4.0, "ECO3"),
+    ("106285000", (2700, 1700), 5.75, "EVO1"),
+    ("106284000", (2700, 1700), 4.0, "EVO1"),
+    ("106302000", (2850, 1950), 5.75, "EVO1"),
+    ("106287000", (2700, 1700), 5.75, "EVO2"),
+    ("106289000", (2700, 1700), 5.75, "EVO4"),
+    ("106483000", (1500, 1300), 6.0, "BRANCO GEADA"),
+    ("106288000", (2700, 1700), 4.0, "EVO4"),
+    ("105942000", (2050, 1460), 6.0, "BRANCO GEADA"),
+    ("105941000", (2700, 1700), 6.0, "BRANCO GEADA"),
+    ("105986000", (850, 600), 4.5, "BRANCO GEADA"),
+    ("106451000", (1320, 1060), 6.0, "BRANCO GEADA"),
+    ("106452000", (1700, 1700), 6.0, "BRANCO GEADA"),
+    ("106453000", (2000, 1500), 6.0, "BLACK PIANO"),
+    ("107364000", (2700, 1700), 6.0, "ECO1"),
+    ("106484000", (1400, 1000), 6.0, "BRANCO GEADA"),
+    ("106485000", (1500, 1220), 6.0, "BRANCO GEADA"),
+    ("106486000", (1500, 1300), 6.0, "BRANCO GEADA"),
+    ("106487000", (1300, 950), 6.0, "BRANCO GEADA"),
+    ("190300000", (1600, 2700), 5.0, "ECO1"),
+    ("190301000", (1600, 2700), 4.0, "ECO2"),
+    ("190302000", (1600, 2700), 4.0, "EVO2"),
+    ("190303000", (1600, 2700), 6.0, "BRANCO GEADA"),
+    ("190304000", (1600, 2700), 4.0, "BLACK PIANO"),
+    ("190305000", (1600, 2700), 4.0, "ECO3"),
+    ("110355000", (1600, 2700), 6.0, "ECO1"),
+    ("110356000", (1600, 2700), 4.0, "ECO3"),
+    ("110357000", (1600, 2700), 4.0, "BLACK PIANO"),
+    ("110358000", (1600, 2700), 4.0, "ECO2"),
+    ("110359000", (1600, 2700), 6.0, "BRANCO GEADA"),
+    ("110501000", (1600, 2400), 4.0, "BLACK PIANO"),
+    ("110360000", (2400, 1600), 6.0, "BRANCO GEADA"),
+    ("110361000", (2150, 1050), 6.0, "BRANCO GEADA"),
+]
+
 CHAPA_COMPRIMENTO_M = 2.7
 CHAPA_LARGURA_M = 1.7
-
 
 # -----------------------------------------------------------------------------
 # REGRAS DE NEGÓCIO - TERMOFORMAGEM (inalterado)
@@ -142,6 +212,29 @@ def calcular_orcamento(cod_item, comprimento, largura, espessura, cor,
     }
     return item, custos
 
+def buscar_chapa(espessura_peca, cor_peca, comp_peca_com_cto, larg_peca_com_cto):
+    # 1. Filtra por espessura e cor
+    opcoes = [c for c in CHAPAS_DB if c[2] == float(espessura_peca) and c[3] == cor_peca]
+    
+    if not opcoes:
+        return None, "Não há chapa cadastrada com essa espessura e cor."
+    
+    # 2. Verifica se a peça cabe na chapa (testando os dois sentidos de corte)
+    chapas_compativeis = []
+    for c in opcoes:
+        comp_chapa, larg_chapa = c[1]
+        # Tenta encaixar normal ou girado
+        if (comp_peca_com_cto <= comp_chapa and larg_peca_com_cto <= larg_chapa) or \
+           (comp_peca_com_cto <= larg_chapa and larg_peca_com_cto <= comp_chapa):
+            chapas_compativeis.append(c)
+            
+    if not chapas_compativeis:
+        return None, "A peça (com o contorno) é maior que as chapas disponíveis para essa cor/espessura."
+    
+    # 3. Retorna a primeira chapa que couber (as maiores estão no topo da lista)
+    # Formato: (Codigo, (L, C), Esp, Cor)
+    c = chapas_compativeis[0]
+    return c, None
 
 # -----------------------------------------------------------------------------
 # PERSISTÊNCIA (inalterado)
@@ -628,10 +721,11 @@ with tab_novo:
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-    with col_prev:
+       with col_prev:
         st.markdown("**Prévia do cálculo**")
+        params = ler_parametros()
         try:
-            prev, custos = calcular_orcamento(**ler_parametros())
+            prev, custos = calcular_orcamento(**params)
         except Exception as e:
             prev = None
             st.warning(str(e))
@@ -644,11 +738,34 @@ with tab_novo:
             m3.metric("Peso bruto", f"{prev['Peso Bruto (kg)']:.3f} kg".replace(".", ","))
             m4.metric("Blank (mm)", prev["Blank (mm)"])
 
+            # --- BUSCA INTELIGENTE DA CHAPA ---
+            cto, _ = tipo_conceito_params(params["conceito"])
+            comp_c_cto = params["comprimento"] + cto
+            larg_c_cto = params["largura"] + cto
+            
+            chapa_info, erro_chapa = buscar_chapa(
+                params["espessura"], 
+                params["cor"], 
+                comp_c_cto, 
+                larg_c_cto
+            )
+            
+            st.markdown("---")
+            st.markdown("**Matéria-Prima (Chapa)**")
+            if erro_chapa:
+                st.error(erro_chapa)
+            else:
+                cod, dim, esp, cor = chapa_info
+                st.success(f"**Código:** {cod}")
+                st.info(f"**Dimensão:** {dim[0]} x {dim[1]} mm\n\n"
+                        f"**Espessura:** {esp} mm | **Cor:** {cor}")
+
+            st.markdown("---")
             st.markdown("**Custo por etapa (R$)**")
             df_custos = pd.DataFrame({"Etapa": list(custos.keys()), "Custo (R$)": list(custos.values())}).set_index("Etapa")
             st.bar_chart(df_custos)
 
-            with st.expander("Ver todos os campos"):
+            with st.expander("Ver todos os campos do cálculo"):
                 detalhe = pd.DataFrame([(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"])
                 st.table(detalhe.set_index("Campo"))
 
