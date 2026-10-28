@@ -89,7 +89,7 @@ def calcular_acabamento(perimetro):
 
 def calcular_orcamento(cod_item, comprimento, largura, espessura, cor,
                        peso_liquido, polimero_label, tipo_corte, conceito):
-    """Executa toda a cadeia de cálculo e devolve um dicionário pronto para salvar."""
+    """Executa toda a cadeia de cálculo e devolve (item para salvar, custo por etapa)."""
     polimero, densidade = POLIMEROS[polimero_label]
     cto, adc = tipo_conceito_params(conceito)
 
@@ -107,7 +107,7 @@ def calcular_orcamento(cod_item, comprimento, largura, espessura, cor,
     custo_total = (custo_termo + custo_prep + custo_destacar
                    + custo_recortar + custo_acabamento)
 
-    return {
+    item = {
         "Código Item": cod_item,
         "Polímero": polimero,
         "Cor": cor,
@@ -125,6 +125,14 @@ def calcular_orcamento(cod_item, comprimento, largura, espessura, cor,
         "Custo Recorte (R$)": round(custo_recortar, 2),
         "Custo Total (R$)": round(custo_total, 2),
     }
+    custos = {
+        "Termoformagem": round(custo_termo, 2),
+        "Preparação": round(custo_prep, 2),
+        "Destacar": round(custo_destacar, 2),
+        "Recortar": round(custo_recortar, 2),
+        "Acabamento": round(custo_acabamento, 2),
+    }
+    return item, custos
 
 
 # -----------------------------------------------------------------------------
@@ -222,7 +230,32 @@ def formatar_planilha(caminho, df):
 # INTERFACE (Streamlit)
 # -----------------------------------------------------------------------------
 
-st.set_page_config(page_title="Orçamento ABS", page_icon="🧮", layout="centered")
+def brl(valor):
+    """Formata número como moeda brasileira: R$ 1.234,56"""
+    return "R$ " + f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def excluir_item(cod_item):
+    df = carregar_df()
+    df = df[df["Código Item"].astype(str) != str(cod_item)]
+    df.to_excel(ARQUIVO, index=False)
+    formatar_planilha(ARQUIVO, df)
+
+
+st.set_page_config(page_title="Orçamento ABS", page_icon="🧮", layout="wide")
+
+st.markdown("""
+<style>
+.block-container {padding-top: 2.5rem; max-width: 1200px;}
+[data-testid="stMetric"] {
+    background: rgba(128,128,128,0.08);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+}
+[data-testid="stMetricLabel"] {opacity: 0.75;}
+</style>
+""", unsafe_allow_html=True)
 
 DEFAULTS = {
     "cod": "",
@@ -243,80 +276,141 @@ for chave, valor in DEFAULTS.items():
 def resetar_formulario():
     for chave, valor in DEFAULTS.items():
         st.session_state[chave] = valor
-    st.session_state.pop("ultimo", None)
 
 
-st.title("🧮 Orçamento de Peças ABS Termoformadas")
+def ler_parametros():
+    s = st.session_state
+    return dict(
+        cod_item=s["cod"].strip(),
+        comprimento=s["comprimento"],
+        largura=s["largura"],
+        espessura=s["espessura"],
+        cor=s["cor"],
+        peso_liquido=s["peso_liquido"],
+        polimero_label=s["polimero"],
+        tipo_corte=s["corte"],
+        conceito=s["conceito"],
+    )
 
-st.text_input("Código do item", key="cod")
 
-col1, col2, col3 = st.columns(3)
-col1.number_input("Comprimento (mm)", min_value=1, max_value=2700, step=1, key="comprimento")
-col2.number_input("Largura (mm)", min_value=1, max_value=1700, step=1, key="largura")
-col3.number_input("Espessura (mm)", min_value=3.0, max_value=7.0, step=0.1,
-                  format="%.1f", key="espessura")
+st.markdown("## 🧮 Orçamento ABS")
+st.caption("Calculadora de peças termoformadas")
 
-col4, col5, col6 = st.columns(3)
-col4.selectbox("Cor", CORES, key="cor")
-col5.selectbox("Polímero", list(POLIMEROS.keys()), key="polimero")
-col6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0, step=0.1,
-                  format="%.3f", key="peso_liquido")
+tab_novo, tab_hist = st.tabs(["Novo orçamento", "Histórico"])
 
-col7, col8 = st.columns(2)
-col7.radio("Tipo de corte", ["Corte Robô", "Corte Manual"], key="corte")
-col8.radio("Conceito", ["Mesa", "Caixa"], key="conceito")
+# ------------------------------- NOVO ORÇAMENTO ------------------------------
+with tab_novo:
+    col_form, col_prev = st.columns([1.1, 1], gap="large")
 
-b1, b2, _ = st.columns([1, 1, 2])
-calcular = b1.button("Calcular e Salvar", type="primary", use_container_width=True)
-b2.button("Novo orçamento", on_click=resetar_formulario, use_container_width=True)
+    # ----- Formulário -----
+    with col_form:
+        with st.container(border=True):
+            st.markdown("**Identificação**")
+            st.text_input("Código do item", key="cod", placeholder="Código único do item")
 
-if calcular:
-    cod_item = st.session_state["cod"].strip()
+        with st.container(border=True):
+            st.markdown("**Dimensões**")
+            c1, c2, c3 = st.columns(3)
+            c1.number_input("Comprimento (mm)", min_value=1, max_value=2700, step=1,
+                            key="comprimento")
+            c2.number_input("Largura (mm)", min_value=1, max_value=1700, step=1,
+                            key="largura")
+            c3.number_input("Espessura (mm)", min_value=3.0, max_value=7.0, step=0.1,
+                            format="%.1f", key="espessura")
 
-    if not cod_item:
-        st.warning("Informe o código do item.")
-    elif codigo_existe(carregar_df(), cod_item):
-        st.warning(f"Código **{cod_item}** já cadastrado. Use outro código.")
-    else:
+        with st.container(border=True):
+            st.markdown("**Material**")
+            c4, c5, c6 = st.columns(3)
+            c4.selectbox("Cor", CORES, key="cor")
+            c5.selectbox("Polímero", list(POLIMEROS.keys()), key="polimero")
+            c6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0,
+                            step=0.1, format="%.3f", key="peso_liquido")
+
+        with st.container(border=True):
+            st.markdown("**Processo**")
+            c7, c8 = st.columns(2)
+            c7.radio("Tipo de corte", ["Corte Robô", "Corte Manual"], key="corte",
+                     horizontal=True)
+            c8.radio("Conceito", ["Mesa", "Caixa"], key="conceito", horizontal=True)
+
+        b1, b2, _ = st.columns([1.3, 1, 1.5])
+        salvar = b1.button("💾 Salvar orçamento", type="primary")
+        b2.button("Limpar", on_click=resetar_formulario)
+
+        if salvar:
+            params = ler_parametros()
+            if not params["cod_item"]:
+                st.warning("Informe o código do item.")
+            elif codigo_existe(carregar_df(), params["cod_item"]):
+                st.warning(f"Código **{params['cod_item']}** já cadastrado. Use outro código.")
+            else:
+                try:
+                    item, _ = calcular_orcamento(**params)
+                    salvar_item(item)
+                    st.toast(f"Orçamento {params['cod_item']} salvo!", icon="✅")
+                    st.success(
+                        f"Orçamento **{params['cod_item']}** salvo: "
+                        f"{brl(item['Custo Total (R$)'])}"
+                    )
+                except PermissionError:
+                    st.error("Não consegui salvar: feche o orcamentos.xlsx no Excel e tente de novo.")
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
+
+    # ----- Prévia ao vivo -----
+    with col_prev:
+        st.markdown("**Prévia do cálculo**")
         try:
-            novo_item = calcular_orcamento(
-                cod_item=cod_item,
-                comprimento=st.session_state["comprimento"],
-                largura=st.session_state["largura"],
-                espessura=st.session_state["espessura"],
-                cor=st.session_state["cor"],
-                peso_liquido=st.session_state["peso_liquido"],
-                polimero_label=st.session_state["polimero"],
-                tipo_corte=st.session_state["corte"],
-                conceito=st.session_state["conceito"],
-            )
-            salvar_item(novo_item)
-            st.session_state["ultimo"] = novo_item
-        except PermissionError:
-            st.error("Não consegui salvar: feche o orcamentos.xlsx no Excel e tente de novo.")
+            prev, custos = calcular_orcamento(**ler_parametros())
         except Exception as e:
-            st.error(f"Erro no cálculo: {e}")
+            prev = None
+            st.warning(str(e))
 
-if "ultimo" in st.session_state:
-    st.success("Orçamento salvo com sucesso")
-    resultado = pd.DataFrame(
-        [(k, str(v)) for k, v in st.session_state["ultimo"].items()],
-        columns=["Campo", "Valor"],
-    )
-    st.table(resultado.set_index("Campo"))
+        if prev:
+            m1, m2 = st.columns(2)
+            m1.metric("Custo total", brl(prev["Custo Total (R$)"]))
+            m2.metric("Peças por chapa", prev["Qtd Peças/Chapa"])
+            m3, m4 = st.columns(2)
+            m3.metric("Peso bruto", f"{prev['Peso Bruto (kg)']:.3f} kg".replace(".", ","))
+            m4.metric("Blank (mm)", prev["Blank (mm)"])
 
-st.divider()
+            st.markdown("**Custo por etapa (R$)**")
+            df_custos = pd.DataFrame(
+                {"Etapa": list(custos.keys()), "Custo (R$)": list(custos.values())}
+            ).set_index("Etapa")
+            st.bar_chart(df_custos)
 
-df_salvo = carregar_df()
-if df_salvo.empty:
-    st.caption("Nenhum orçamento salvo ainda.")
-else:
-    st.subheader(f"Orçamentos salvos ({len(df_salvo)})")
-    st.dataframe(df_salvo, use_container_width=True, hide_index=True)
-    st.download_button(
-        "Baixar planilha (.xlsx)",
-        data=ARQUIVO.read_bytes(),
-        file_name="orcamentos.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        icon=":material/download:",
-    )
+            with st.expander("Ver todos os campos"):
+                detalhe = pd.DataFrame(
+                    [(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"]
+                )
+                st.table(detalhe.set_index("Campo"))
+
+# --------------------------------- HISTÓRICO ---------------------------------
+with tab_hist:
+    df_salvo = carregar_df()
+    if df_salvo.empty:
+        st.info("Nenhum orçamento salvo ainda.")
+    else:
+        h1, h2, h3 = st.columns(3)
+        h1.metric("Orçamentos salvos", len(df_salvo))
+        h2.metric("Custo médio", brl(df_salvo["Custo Total (R$)"].mean()))
+        h3.metric("Maior custo", brl(df_salvo["Custo Total (R$)"].max()))
+
+        st.dataframe(df_salvo, hide_index=True)
+
+        st.download_button(
+            "⬇️ Baixar planilha (.xlsx)",
+            data=ARQUIVO.read_bytes(),
+            file_name="orcamentos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        with st.expander("Excluir um orçamento"):
+            cod_del = st.selectbox("Código do item", df_salvo["Código Item"].astype(str).tolist())
+            if st.button("Excluir"):
+                try:
+                    excluir_item(cod_del)
+                    st.rerun()
+                except PermissionError:
+                    st.error("Feche o orcamentos.xlsx no Excel e tente de novo.")
