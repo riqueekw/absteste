@@ -121,7 +121,7 @@ with tab_abs:
         with st.container(border=True):
             st.markdown("**Material**")
             c4, c5, c6 = st.columns(3)
-            c4.selectbox("Cor", calc.CORES, key="abs_cor")
+            c4.selectbox("Cor", cores, key="abs_cor")
             c5.selectbox("Polímero", list(calc.POLIMEROS), key="abs_pol")
             c6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0, step=0.1,
                             format="%.3f", key="abs_peso")
