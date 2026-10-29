@@ -1,625 +1,18 @@
 # =============================================================================
-# ORÇAMENTO ABS - Calculadora de Termoformagem + Reforços + Montagem + Pintura
-# Rodar com:  streamlit run app.py
+# ORÇAMENTOS  |  rodar com:  streamlit run app.py
+# app.py = telas | calculos.py = regras | dados.py = Excel (parâmetros e orçamentos)
 # =============================================================================
-
-import math
-from pathlib import Path
-
 import pandas as pd
 import streamlit as st
 
-from calculos_engenharia import (
-    DENSIDADE, peso_tubo_redondo, peso_tubo_quadrado, peso_tubo_retangular,
-    peso_barra_redonda, peso_barra_quadrada, peso_barra_sextavada,
-    peso_chapa_circular, peso_chapa_plastica, peso_plastico_bolha,
-    desenvolvimento_chapa, comprimento_dobra_raio_medio,
-    diametro_para_perimetro, perimetro_para_diametro,
-    tonelagem_prensa, volume_recipiente,
-    aproveitamento_chapa, tempo_corte_laser,
-    pintura_tunel, pintura_pistola_quantidade, pintura_pistola_tempo,
-    tinta_agco, tinta_fundo_agco, tinta_po, custo_mo_plastico,
-)
+import calculos as calc
+import dados as d
 
-ARQUIVO = Path(__file__).parent / "orcamentos.xlsx"
-PLANILHA_REF = Path(__file__).parent / "Planilha ABS-PINTURA-REFORÇO.xlsx"
-
-CORES = sorted([
-    "EVO1", "EVO2", "EVO4",
-    "ECO1", "ECO2", "ECO3",
-    "PRETO", "BLACK PIANO", "BRANCO GEADA",
-])
-
-POLIMEROS = {
-    "ABS-s": ("ABS", 1.06),
-    "ABS-PMMA": ("ABS-PMMA", 1.18),
-    "ABS-TPE": ("ABS-TPE", 1.11),
-}
-
-# Lista de Chapas Padrão (Código, Dimensão (L x C), Espessura, Cor)
-CHAPAS_DB = [
-    # --- CHAPAS GRANDES (2700 / 3600 / 2800) ---
-    ("106419000", (3610, 1930), 6.0, "PRETO"),
-    ("106302000", (2850, 1950), 5.75, "EVO1"),
-    ("106280000", (2700, 1700), 4.0, "ECO2"),
-    ("106281000", (2700, 1700), 5.75, "ECO2"),
-    ("106282000", (2700, 1700), 4.0, "ECO3"),
-    ("106283000", (2700, 1700), 5.75, "ECO3"),
-    ("106278000", (2700, 1700), 4.0, "ECO1"),
-    ("106279000", (2700, 1700), 5.75, "ECO1"),
-    ("106291000", (2700, 1700), 6.0, "ECO1"),
-    ("106284000", (2700, 1700), 4.0, "EVO1"),
-    ("106285000", (2700, 1700), 5.75, "EVO1"),
-    ("106287000", (2700, 1700), 5.75, "EVO2"),
-    ("105751000", (2700, 1700), 4.0, "EVO2"),
-    ("106288000", (2700, 1700), 4.0, "EVO4"),
-    ("106289000", (2700, 1700), 5.75, "EVO4"),
-    ("105753000", (2700, 1700), 4.0, "EVO4"),
-    ("105941000", (2700, 1700), 6.0, "BRANCO GEADA"),
-    ("106292000", (2700, 1700), 4.0, "PRETO"),
-    
-    # --- CHAPAS MÉDIAS (2400 / 2200 / 2100 / 2050 / 2000) ---
-    ("105310000", (2400, 1600), 4.0, "EVO2"),
-    ("106294000", (2400, 1600), 4.0, "ECO3"),
-    ("110360000", (2400, 1600), 6.0, "BRANCO GEADA"),
-    ("105398000", (2270, 1600), 5.75, "PRETO"),
-    ("106297000", (2200, 1050), 4.0, "EVO2"),
-    ("107439000", (2100, 1100), 6.0, "EVO4"),
-    ("106235000", (2100, 1500), 6.5, "ECO3"),
-    ("105942000", (2050, 1460), 6.0, "BRANCO GEADA"),
-    ("106453000", (2000, 1500), 6.0, "BLACK PIANO"),
-
-    # --- CHAPAS 1700 / 1600 / 1500 ---
-    ("106452000", (1700, 1700), 6.0, "BRANCO GEADA"),
-    ("105397000", (1600, 1200), 5.75, "PRETO"),
-    ("105395000", (1600, 1200), 4.0, "PRETO"),
-    ("105909000", (1600, 1200), 4.0, "PRETO"),
-    ("106271000", (1600, 1200), 4.0, "ECO2"),
-    ("106299000", (1600, 1200), 6.5, "ECO3"),
-    ("105308000", (1600, 1200), 4.0, "EVO2"),
-    ("105307000", (1600, 1200), 4.0, "EVO4"),
-    ("105904000", (1600, 1200), 4.5, "BRANCO GEADA"),
-    ("110501000", (1600, 2400), 4.0, "BLACK PIANO"),
-    ("190301000", (1600, 2700), 4.0, "ECO2"),
-    ("110358000", (1600, 2700), 4.0, "ECO2"),
-    ("190302000", (1600, 2700), 4.0, "EVO2"),
-    ("190300000", (1600, 2700), 5.0, "ECO1"),
-    ("110355000", (1600, 2700), 6.0, "ECO1"),
-    ("190305000", (1600, 2700), 4.0, "ECO3"),
-    ("110356000", (1600, 2700), 4.0, "ECO3"),
-    ("190303000", (1600, 2700), 6.0, "BRANCO GEADA"),
-    ("110359000", (1600, 2700), 6.0, "BRANCO GEADA"),
-    ("190304000", (1600, 2700), 4.0, "BLACK PIANO"),
-    ("110357000", (1600, 2700), 4.0, "BLACK PIANO"),
-    ("106235000", (1500, 2100), 6.5, "ECO3"),
-    ("106483000", (1500, 1300), 6.0, "BRANCO GEADA"),
-    ("106485000", (1500, 1220), 6.0, "BRANCO GEADA"),
-    ("106486000", (1500, 1300), 6.0, "BRANCO GEADA"),
-
-    # --- CHAPAS 1400 / 1320 / 1300 ---
-    ("105556000", (2700, 1400), 5.75, "EVO1"),
-    ("105782000", (2700, 1400), 5.75, "EVO1"),
-    ("106484000", (1400, 1000), 6.0, "BRANCO GEADA"),
-    ("106451000", (1320, 1060), 6.0, "BRANCO GEADA"),
-    ("106487000", (1300, 950), 6.0, "BRANCO GEADA"),
-
-    # --- CHAPAS PEQUENAS (1200 / 850) ---
-    ("105624000", (1200, 1600), 4.0, "EVO1"),
-    ("106290000", (1200, 1600), 4.0, "ECO1"),
-    ("105905000", (1200, 1400), 4.5, "BRANCO GEADA"),
-    ("105909000", (800, 850), 4.0, "PRETO"),
-    ("105986000", (850, 600), 4.5, "BRANCO GEADA"),
-]
-
-CHAPA_COMPRIMENTO_M = 2.7
-CHAPA_LARGURA_M = 1.7
-
-# -----------------------------------------------------------------------------
-# REGRAS DE NEGÓCIO - TERMOFORMAGEM (inalterado)
-# -----------------------------------------------------------------------------
-
-def tipo_conceito_params(conceito: str):
-    if conceito == "Mesa":
-        return 200, 0.3
-    return 100, 0.0
-
-
-def calcular_peso_bruto(comprimento, largura, cto, espessura, densidade, adc):
-    return ((comprimento + cto) * (largura + cto) * espessura * densidade * (1 + adc)) / 1_000_000
-
-
-def calcular_perimetro(comprimento, largura, cto):
-    comp = (comprimento + cto) / 1000
-    lng = (largura + cto) / 1000
-    perimetro = (2 * comp) + (2 * lng)
-    return comp, lng, perimetro
-
-
-def quantidade_pecas(comp, lng):
-    qtd1 = math.floor(CHAPA_COMPRIMENTO_M / comp) * math.floor(CHAPA_LARGURA_M / lng)
-    qtd2 = math.floor(CHAPA_COMPRIMENTO_M / lng) * math.floor(CHAPA_LARGURA_M / comp)
-    return max(qtd1, qtd2)
-
-
-def calcular_termoformagem(comp, lng):
-    qtd = quantidade_pecas(comp, lng)
-    if qtd <= 0:
-        raise ValueError("Não é possível encaixar nenhuma peça na chapa com essas medidas.")
-    termo = 5.75 / qtd
-    custo_termo = (termo * 252) / 60
-    return termo, custo_termo, qtd
-
-
-def calcular_preparacao(termo):
-    prep = termo * 0.1
-    return prep, (prep * 105) / 60
-
-
-def calcular_destacar(perimetro):
-    destacar = perimetro * 0.25
-    return destacar, (destacar * 105) / 60
-
-
-def calcular_recortar(perimetro):
-    recortar = perimetro * 0.5
-    return recortar, (recortar * 105) / 60
-
-
-def calcular_acabamento(perimetro):
-    acabamento = perimetro * 0.9
-    return acabamento, (acabamento * 105) / 60
-
-
-def calcular_orcamento(cod_item, comprimento, largura, espessura, cor,
-                       peso_liquido, polimero_label, tipo_corte, conceito):
-    polimero, densidade = POLIMEROS[polimero_label]
-    cto, adc = tipo_conceito_params(conceito)
-
-    comprimento_blank = comprimento + cto
-    largura_blank = largura + cto
-
-    peso_bruto = calcular_peso_bruto(comprimento, largura, cto, espessura, densidade, adc)
-    comp, lng, perimetro = calcular_perimetro(comprimento, largura, cto)
-    termo, custo_termo, qtd_pecas = calcular_termoformagem(comp, lng)
-    prep, custo_prep = calcular_preparacao(termo)
-    destacar, custo_destacar = calcular_destacar(perimetro)
-    recortar, custo_recortar = calcular_recortar(perimetro)
-    acabamento, custo_acabamento = calcular_acabamento(perimetro)
-
-    custo_total = (custo_termo + custo_prep + custo_destacar
-                   + custo_recortar + custo_acabamento)
-
-    item = {
-        "Código Item": cod_item,
-        "Polímero": polimero,
-        "Cor": cor,
-        "Tipo Corte": tipo_corte,
-        "Conceito": conceito,
-        "Blank (mm)": f"{comprimento_blank} x {largura_blank}",
-        "Peso Líquido (kg)": round(peso_liquido, 3),
-        "Peso Bruto (kg)": round(peso_bruto, 3),
-        "Qtd Peças/Chapa": qtd_pecas,
-        "Tempo Termo (min)": round(termo, 2),
-        "Tempo Prep (min)": round(prep, 2),
-        "Tempo Destacar (min)": round(destacar, 2),
-        "Tempo Recortar (min)": round(recortar, 2),
-        "Tempo Acabamento (min)": round(acabamento, 2),
-        "Custo Recorte (R$)": round(custo_recortar, 2),
-        "Custo Total (R$)": round(custo_total, 2),
-    }
-    custos = {
-        "Termoformagem": round(custo_termo, 2),
-        "Preparação": round(custo_prep, 2),
-        "Destacar": round(custo_destacar, 2),
-        "Recortar": round(custo_recortar, 2),
-        "Acabamento": round(custo_acabamento, 2),
-    }
-    return item, custos
-
-def buscar_chapa(espessura_peca, cor_peca, comp_peca_com_cto, larg_peca_com_cto):
-    # 1. Filtra por espessura e cor
-    opcoes = [c for c in CHAPAS_DB if c[2] == float(espessura_peca) and c[3] == cor_peca]
-    
-    if not opcoes:
-        return None, "Não há chapa cadastrada com essa espessura e cor."
-    
-    # 2. Verifica se a peça cabe na chapa (testando os dois sentidos de corte)
-    chapas_compativeis = []
-    for c in opcoes:
-        comp_chapa, larg_chapa = c[1]
-        # Tenta encaixar normal ou girado
-        if (comp_peca_com_cto <= comp_chapa and larg_peca_com_cto <= larg_chapa) or \
-           (comp_peca_com_cto <= larg_chapa and larg_peca_com_cto <= comp_chapa):
-            chapas_compativeis.append(c)
-            
-    if not chapas_compativeis:
-        return None, "A peça (com o contorno) é maior que as chapas disponíveis para essa cor/espessura."
-    
-    # 3. Retorna a primeira chapa que couber (as maiores estão no topo da lista)
-    # Formato: (Codigo, (L, C), Esp, Cor)
-    c = chapas_compativeis[0]
-    return c, None
-
-# -----------------------------------------------------------------------------
-# PERSISTÊNCIA (inalterado)
-# -----------------------------------------------------------------------------
-
-def carregar_df():
-    if ARQUIVO.exists():
-        return pd.read_excel(ARQUIVO)
-    return pd.DataFrame()
-
-
-def codigo_existe(df, cod_item):
-    if df.empty or "Código Item" not in df.columns:
-        return False
-    return cod_item in df["Código Item"].astype(str).values
-
-
-def salvar_item(novo_item):
-    df = carregar_df()
-    df = pd.concat([df, pd.DataFrame([novo_item])], ignore_index=True)
-    df.to_excel(ARQUIVO, index=False)
-    formatar_planilha(ARQUIVO, df)
-    return df
-
-
-COLUNAS_MOEDA = {"Custo Recorte (R$)", "Custo Total (R$)"}
-COLUNAS_DECIMAL = {
-    "Peso Líquido (kg)", "Peso Bruto (kg)",
-    "Tempo Termo (min)", "Tempo Prep (min)", "Tempo Destacar (min)",
-    "Tempo Recortar (min)", "Tempo Acabamento (min)",
-}
-
-
-def formatar_planilha(caminho, df):
-    from openpyxl import load_workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-
-    wb = load_workbook(caminho)
-    ws = wb.active
-    ws.title = "Orçamentos"
-
-    n_linhas = ws.max_row
-    n_colunas = ws.max_column
-
-    fonte_padrao = Font(name="Calibri", size=11)
-    for linha in ws.iter_rows(min_row=1, max_row=n_linhas, max_col=n_colunas):
-        for celula in linha:
-            celula.font = fonte_padrao
-
-    fundo_cabecalho = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-    fonte_cabecalho = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    for celula in ws[1]:
-        celula.fill = fundo_cabecalho
-        celula.font = fonte_cabecalho
-        celula.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    ws.row_dimensions[1].height = 30
-
-    borda = Border(*(Side(style="thin", color="D9D9D9"),) * 4)
-    for linha in ws.iter_rows(min_row=1, max_row=n_linhas, max_col=n_colunas):
-        for celula in linha:
-            celula.border = borda
-
-    fundo_zebra = PatternFill(start_color="F2F6FA", end_color="F2F6FA", fill_type="solid")
-    colunas = list(df.columns)
-    for idx_linha in range(2, n_linhas + 1):
-        if idx_linha % 2 == 0:
-            for celula in ws[idx_linha]:
-                celula.fill = fundo_zebra
-        for idx_col, nome_col in enumerate(colunas, start=1):
-            celula = ws.cell(row=idx_linha, column=idx_col)
-            if nome_col in COLUNAS_MOEDA:
-                celula.number_format = 'R$ #,##0.00'
-            elif nome_col in COLUNAS_DECIMAL:
-                celula.number_format = '0.00'
-            if idx_col > 1:
-                celula.alignment = Alignment(horizontal="center")
-
-    for idx_col, nome_col in enumerate(colunas, start=1):
-        maior = len(str(nome_col))
-        for idx_linha in range(2, n_linhas + 1):
-            valor = ws.cell(row=idx_linha, column=idx_col).value
-            maior = max(maior, len(str(valor)) if valor is not None else 0)
-        ws.column_dimensions[get_column_letter(idx_col)].width = min(maior + 4, 32)
-
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = ws.dimensions
-
-    wb.save(caminho)
-
-
-# -----------------------------------------------------------------------------
-# NOVO: BASE DE DADOS DE REFERÊNCIA (lida da Planilha ABS-PINTURA-REFORÇO.xlsx)
-# -----------------------------------------------------------------------------
-
-# Fallback caso a planilha não exista (valores extraídos da planilha)
-CENTROS_CUSTO_FALLBACK = {
-    312: ("MANUTENÇÃO", 80),
-    322: ("MODELARIA", 80),
-    323: ("PINTURA DE PEÇAS - TUNEL", 1400),
-    325: ("FERRAMENTARIA", 80),
-    338: ("PREPARAÇÃO PINTURA CABINE", 188),
-    339: ("ACABAMENTO TERMO FORMAGEM", 105),
-    343: ("TERMO FORMAGEM", 230),
-    345: ("PINTURA PÓ", 170),
-    348: ("CORTE LASER 3D", 340),
-    358: ("P&D", 80),
-    359: ("CORTE E DOBRA", 140),
-    360: ("PRENSAS", 240),
-    366: ("MONTAGEM FINAL", 130),
-    367: ("SOLDA E MONTAGEM", 170),
-    368: ("TERMO FORMAGEM - MARCOPOLO", 252),
-    369: ("ACABAMENTO TERMO FORMAGEM - MARCOPOLO", 105),
-    370: ("CORTE LASER 2D", 180),
-}
-
-# Grupos de máquina relevantes para os processos (descrição = nome que aparece)
-GRUPOS_MAQUINA_FALLBACK = [
-    "GUILHOTINA MECANICA NEWTON",
-    "CORTE LASER 2D",
-    "DOBRADEIRA CNC 160 TN - YAWEI",
-    "PRENSA EXC. JUTMANN 130 T",
-    "MÁQ. TERMO FORMAGEM (MAQUINA 1)",
-    "DESTACAR PEÇA 1",
-    "RECORTAR PEÇA FRESA 1",
-    "LIXADEIRA 1",
-    "CABINE DE PINTURA DE PECAS",
-    "MONTAGEM FINAL - DIVERSOS",
-]
-
-# Preços/kg da matéria-prima (extraídos da aba ORÇAMENTO INSERTOS)
-MATERIAS_PRIMA = [
-    ("109299000", "CHAPA AÇO 1,90x1000x3000 NBR7008 ZEE G1 Z100", 7.31),
-    ("1064003000", "CHAPA ALUMÍNIO 1,50x1000x2000 LIGA 1200 H14", 28.75),
-    ("107679000", "CHAPA AÇO 1,55x1000x2680 NBR7008 ZEE G2 Z100", 6.76),
-    ("107676000", "CHAPA AÇO 1,20x1500x1795 ST05 Z/NBR7008 ZEE G2", 8.54),
-    ("106546000", "CHAPA AÇO 1,55mm 1200x3000 NBR7008 ZEE GR1 Z100", 4.2525),
-    ("100755000", "CHAPA AÇO (diversos)", 6.87),
-    ("100106000", "CHAPA AÇO 4,75mm FQD 1200x3000 SAE1006 DEC", 5.8373),
-    ("109796000", "CHAPA AÇO (diversos)", 5.0438),
-    ("106039000", "CHAPA AÇO (diversos)", 5.849),
-    ("103085000", "CHAPA AÇO (diversos)", 4.22),
-    ("109389000", "CHAPA AÇO 1,00x1500x2700 GI EN10346 DX56D Z140", 6.87),
-    ("103209000", "CHAPA AÇO (diversos)", 5.1084),
-    ("106475000", "MANTA DE ISOLAMENTO", 39.283),
-    ("100634000", "LÍQUIDO (diversos)", 23.53),
-    ("107670000", "CHAPA AÇO 6,35x1200x2000 NBR6656 LNE-38 DECOL", 5.91),
-]
-
-# Fatores de tinta por tipo de acabamento (aba ORÇAMENTO PINTURA)
-FATOR_TINTA = {
-    "PRETO FOSCO": 1.89,
-    "PRETO BRILHO": 1.5,
-    "CINZA TITÂNIO": 1.89,
-    "CINZA CRISTAL": 1.89,
-    "FUNDO CINZA": 1.89,
-    "AZUL MP2": 1.89,
-    "EVO1": 1.89,
-    "EVO2": 1.89,
-    "EVO4 FOSCO": 1.89,
-    "ECO1": 1.89,
-    "ECO2": 1.89,
-    "ECO3": 1.89,
-    "PRIMER": 1.89,
-    "PRIMER PRETO": 1.89,
-    "RETARDADOR": 1.5,
-    "PRATA": 1.89,
-}
-
-# Preços por litro de tinta (aba ORÇAMENTO PINTURA coluna M — valores unitários)
-PRECO_TINTA = {
-    "PRETO FOSCO": 79.72,
-    "PRETO BRILHO": 33.078,
-    "CINZA TITÂNIO": 59.95,
-    "CINZA CRISTAL": 79.72,
-    "FUNDO CINZA": 79.72,
-    "AZUL MP2": 79.72,
-    "EVO1": 79.72,
-    "EVO2": 48.98,
-    "EVO4 FOSCO": 52.03,
-    "ECO1": 79.72,
-    "ECO2": 48.57,
-    "ECO3": 71.28,
-    "PRIMER": 44.56,
-    "PRIMER PRETO": 23.53,
-    "RETARDADOR": 26.46,
-    "PRATA": 103.4,
-}
-
-# Constantes de pintura (aba ORÇAMENTO PINTURA)
-TINTA_POR_MM2 = 3.26e-07           # coluna G
-CATALISADOR_DIVISOR = 8            # coluna I
-TEMPO_PINTURA_POR_MM2 = 1.8181e-05 # coluna J
-CUSTO_HORA_PINTURA = 175.0         # usado na fórmula M
-PRECO_TINTA_REF = 57.01             # default quando cor não está no dicionário
-
-
-def carregar_centros_custo():
-    """Lê a aba CENTRO DE CUSTO da planilha de referência; fallback embutido."""
-    if PLANILHA_REF.exists():
-        try:
-            df = pd.read_excel(PLANILHA_REF, sheet_name="CENTRO DE CUSTO", header=1)
-            df = df.dropna(subset=["C.C."])
-            centros = {}
-            for _, row in df.iterrows():
-                try:
-                    cc = int(row["C.C."])
-                    centros[cc] = (str(row["DESCRIÇÃO"]), float(row["CUSTO"]))
-                except (ValueError, TypeError):
-                    continue
-            if centros:
-                return centros
-        except Exception:
-            pass
-    return dict(CENTROS_CUSTO_FALLBACK)
-
-
-def carregar_grupos_maquina():
-    """Lê a aba GRUPO MÁQUINA 2025; retorna lista de descrições únicas."""
-    if PLANILHA_REF.exists():
-        try:
-            df = pd.read_excel(PLANILHA_REF, sheet_name="GRUPO MÁQUINA 2025")
-            nomes = df["Descrição"].dropna().astype(str).unique().tolist()
-            if nomes:
-                return sorted(nomes)
-        except Exception:
-            pass
-    return list(GRUPOS_MAQUINA_FALLBACK)
-
-
-# -----------------------------------------------------------------------------
-# NOVAS REGRAS DE NEGÓCIO - REFORÇOS (INSERTOS)
-# -----------------------------------------------------------------------------
-
-def calcular_custo_hora(custo_hora: float, tempo_min: float, num_homens: int = 1) -> float:
-    """Fórmula da planilha: custo_hora * tempo / 60 * nº_homens."""
-    return (custo_hora * tempo_min / 60) * num_homens
-
-
-def calcular_reforco(
-    cod_item: str,
-    materiais: list,       # [(cod, desc, preco_kg, qtd, un), ...]
-    terceiros: list,       # [(cod, desc, qtd, preco_unit), ...]
-    operacoes: list,       # [(num_op, descricao, centro_custo, tempo_min, num_homens), ...]
-) -> dict:
-    """
-    Retorna dict com linhas detalhadas e totais:
-      - total_materia_prima
-      - total_terceiros
-      - total_mao_obra_setup  (soma R$ setup)
-      - total_mao_obra_operacao (soma R$ operação)
-      - custo_total (matéria-prima + terceiros + mão-de-obra)
-    """
-    linhas_mat = []
-    total_mp = 0.0
-    for cod, desc, preco, qtd, un in materiais:
-        subtotal = float(qtd) * float(preco)
-        total_mp += subtotal
-        linhas_mat.append({
-            "Código": cod, "Descrição": desc, "Qtd": qtd, "Un": un,
-            "Preço Unit. (R$)": round(preco, 4),
-            "Total (R$)": round(subtotal, 2),
-        })
-
-    linhas_ter = []
-    total_ter = 0.0
-    for cod, desc, qtd, preco_unit in terceiros:
-        subtotal = float(qtd) * float(preco_unit)
-        total_ter += subtotal
-        linhas_ter.append({
-            "Código": cod, "Descrição": desc, "Qtd": qtd,
-            "Preço Unit. (R$)": round(preco_unit, 2),
-            "Total (R$)": round(subtotal, 2),
-        })
-
-    centros = carregar_centros_custo()
-    linhas_op = []
-    total_setup = 0.0
-    total_oper = 0.0
-    for num_op, descricao, cc_codigo, setup_min, tempo_min, num_homens in operacoes:
-        desc_cc, valor_hora = centros.get(int(cc_codigo), ("—", 0.0))
-        rs_setup = calcular_custo_hora(valor_hora, float(setup_min), int(num_homens))
-        rs_oper = calcular_custo_hora(valor_hora, float(tempo_min), int(num_homens))
-        total_setup += rs_setup
-        total_oper += rs_oper
-        linhas_op.append({
-            "Nº Op.": num_op,
-            "Descrição": descricao,
-            "Centro Custo": f"{int(cc_codigo)} - {desc_cc}",
-            "Custo Hora (R$)": round(valor_hora, 2),
-            "Setup (min)": setup_min,
-            "Tempo Op. (min)": tempo_min,
-            "Nº Homens": num_homens,
-            "R$ Setup": round(rs_setup, 2),
-            "R$ Operação": round(rs_oper, 2),
-        })
-
-    custo_total = total_mp + total_ter + total_setup + total_oper
-
-    return {
-        "cod_item": cod_item,
-        "linhas_materiais": linhas_mat,
-        "linhas_terceiros": linhas_ter,
-        "linhas_operacoes": linhas_op,
-        "total_materia_prima": round(total_mp, 2),
-        "total_terceiros": round(total_ter, 2),
-        "total_setup": round(total_setup, 2),
-        "total_operacao": round(total_oper, 2),
-        "custo_total": round(custo_total, 2),
-    }
-
-
-# -----------------------------------------------------------------------------
-# NOVA REGRA - MONTAGEM (custo-hora do setor)
-# -----------------------------------------------------------------------------
-
-def calcular_montagem(cc_codigo: int, tempo_min: float, num_homens: int = 1) -> dict:
-    centros = carregar_centros_custo()
-    desc, valor_hora = centros.get(int(cc_codigo), ("—", 0.0))
-    custo = calcular_custo_hora(valor_hora, float(tempo_min), int(num_homens))
-    return {
-        "centro_custo": f"{int(cc_codigo)} - {desc}",
-        "custo_hora": round(valor_hora, 2),
-        "tempo_min": tempo_min,
-        "num_homens": num_homens,
-        "custo_montagem": round(custo, 2),
-    }
-
-
-# -----------------------------------------------------------------------------
-# NOVA REGRA - PINTURA
-# -----------------------------------------------------------------------------
-
-def calcular_pintura(comprimento_mm, largura_mm, cor, num_lados=2) -> dict:
-    area_mm2 = float(comprimento_mm) * float(largura_mm)
-    fator = FATOR_TINTA.get(cor, 1.89)
-    tinta_ml = area_mm2 * TINTA_POR_MM2 * fator
-    tinta_l = tinta_ml / 1000
-    catalisador_l = tinta_l / CATALISADOR_DIVISOR
-    tempo_pintura_min = (area_mm2 * TEMPO_PINTURA_POR_MM2) / 2  # já dividido por 2 como na planilha
-    preco_tinta = PRECO_TINTA.get(cor, PRECO_TINTA_REF)
-    custo_tinta = tinta_l * preco_tinta
-    custo_mao_obra = (tempo_pintura_min / 60) * CUSTO_HORA_PINTURA
-    custo_um_lado = custo_tinta + custo_mao_obra
-    custo_dois_lados = custo_um_lado * 2
-    return {
-        "area_mm2": round(area_mm2, 2),
-        "fator_tinta": fator,
-        "tinta_ml": round(tinta_ml, 2),
-        "tinta_l": round(tinta_l, 4),
-        "catalisador_l": round(catalisador_l, 4),
-        "tempo_pintura_min": round(tempo_pintura_min, 2),
-        "preco_tinta_l": preco_tinta,
-        "custo_tinta": round(custo_tinta, 2),
-        "custo_mao_obra": round(custo_mao_obra, 2),
-        "custo_um_lado": round(custo_um_lado, 2),
-        "custo_dois_lados": round(custo_dois_lados, 2) if num_lados == 2 else None,
-        "num_lados": num_lados,
-    }
-
-
-# -----------------------------------------------------------------------------
-# INTERFACE
-# -----------------------------------------------------------------------------
-
-def brl(valor):
-    return "R$ " + f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def excluir_item(cod_item):
-    df = carregar_df()
-    df = df[df["Código Item"].astype(str) != str(cod_item)]
-    df.to_excel(ARQUIVO, index=False)
-    formatar_planilha(ARQUIVO, df)
-
-
-st.set_page_config(page_title="Orçamento ABS", page_icon="🧮", layout="wide")
+st.set_page_config(page_title="Orçamentos", page_icon="🧮", layout="wide")
 
 st.markdown("""
 <style>
-.block-container {padding-top: 2.5rem; max-width: 1200px;}
+.block-container {padding-top: 2.5rem; max-width: 1300px;}
 [data-testid="stMetric"] {
     background: rgba(128,128,128,0.08);
     border: 1px solid rgba(128,128,128,0.25);
@@ -630,650 +23,449 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-DEFAULTS = {
-    "cod": "",
-    "comprimento": 1000,
-    "largura": 1000,
-    "espessura": 3.0,
-    "cor": CORES[0],
-    "peso_liquido": 1.0,
-    "polimero": list(POLIMEROS.keys())[0],
-    "corte": "Corte Robô",
-    "conceito": "Mesa",
-}
+par = d.carregar_parametros()
 
-for chave, valor in DEFAULTS.items():
-    st.session_state.setdefault(chave, valor)
+if _msg := st.session_state.pop("_msg", None):
+    st.toast(_msg, icon="✅")
 
 
-def resetar_formulario():
-    for chave, valor in DEFAULTS.items():
+# ------------------------------- utilidades ----------------------------------
+
+def num(v, casas=2):
+    return f"{v:,.{casas}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def brl(v):
+    return "R$ " + num(v)
+
+
+def iniciar(padrao):
+    for chave, valor in padrao.items():
+        st.session_state.setdefault(chave, valor)
+
+
+def resetar(padrao, versao=None):
+    for chave, valor in padrao.items():
         st.session_state[chave] = valor
+    if versao:  # muda a chave das tabelas editáveis para limpá-las
+        st.session_state[versao] = st.session_state.get(versao, 0) + 1
 
 
-def ler_parametros():
+def salvar(aba, cod, linhas, ok):
+    if not cod:
+        st.warning("Informe o código do item.")
+    elif d.codigo_existe(aba, cod):
+        st.warning(f"Código **{cod}** já cadastrado nesta aba. Use outro ou exclua o anterior no Histórico.")
+    else:
+        try:
+            d.salvar_linhas(linhas)
+            st.toast(f"Orçamento {cod} salvo!", icon="✅")
+            st.success(ok)
+        except PermissionError:
+            st.error("Não consegui salvar: feche o orcamentos.xlsx no Excel e tente de novo.")
+        except Exception as e:
+            st.error(f"Erro ao salvar: {e}")
+
+
+def botoes(pref, padrao, versao=None):
+    b1, b2, _ = st.columns([1.3, 1, 1.5])
+    clicou = b1.button("💾 Salvar orçamento", type="primary", key=f"{pref}_salvar")
+    b2.button("Limpar", key=f"{pref}_limpar", on_click=resetar, args=(padrao, versao))
+    return clicou
+
+
+def tabela_vazia(**colunas):
+    return pd.DataFrame({nome: pd.Series(dtype=tipo) for nome, tipo in colunas.items()})
+
+
+def cfg_num(rotulo, **kw):
+    return st.column_config.NumberColumn(rotulo, min_value=0.0, **kw)
+
+
+materiais = par.materiais["Descrição"].dropna().tolist()
+operacoes = par.operacoes["Operação"].dropna().tolist()
+tintas = par.tintas["Tinta"].dropna().tolist()
+centros = [int(float(x)) for x in par.centros["Código"].dropna()]
+nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
+           for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
+           if pd.notna(cod) and pd.notna(v)}
+
+st.markdown("## 🧮 Orçamentos")
+tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_hist, tab_par = st.tabs(
+    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Histórico", "Parâmetros"])
+
+# =============================== ABS =========================================
+with tab_abs:
+    PAD = {"abs_cod": "", "abs_comp": 1000, "abs_larg": 1000, "abs_esp": 3.0, "abs_cor": calc.CORES[0],
+           "abs_peso": 1.0, "abs_pol": list(calc.POLIMEROS)[0], "abs_corte": "Corte Robô", "abs_conc": "Mesa"}
+    iniciar(PAD)
     s = st.session_state
-    return dict(
-        cod_item=s["cod"].strip(),
-        comprimento=s["comprimento"],
-        largura=s["largura"],
-        espessura=s["espessura"],
-        cor=s["cor"],
-        peso_liquido=s["peso_liquido"],
-        polimero_label=s["polimero"],
-        tipo_corte=s["corte"],
-        conceito=s["conceito"],
-    )
+    col_f, col_r = st.columns([1.1, 1], gap="large")
 
+    def params_abs():
+        return dict(cod_item=s["abs_cod"].strip(), comprimento=s["abs_comp"], largura=s["abs_larg"],
+                    espessura=s["abs_esp"], cor=s["abs_cor"], peso_liquido=s["abs_peso"],
+                    polimero_label=s["abs_pol"], tipo_corte=s["abs_corte"], conceito=s["abs_conc"])
 
-st.markdown("## 🧮 Orçamento ABS")
-st.caption("Calculadora de peças termoformadas + reforços + montagem + pintura")
-
-tab_novo, tab_hist, tab_reforco, tab_montagem, tab_pintura, \
-    tab_eng, tab_aprov, tab_laser = st.tabs([
-    "Novo orçamento", "Histórico", "Reforços (Insertos)",
-    "Montagem", "Pintura", "Engenharia",
-    "Aproveitamento", "Corte Laser"
-])
-# ------------------------------- NOVO ORÇAMENTO ------------------------------
-with tab_novo:
-    col_form, col_prev = st.columns([1.1, 1], gap="large")
-
-    # ----- Formulário -----
-    with col_form:
+    with col_f:
         with st.container(border=True):
             st.markdown("**Identificação**")
-            st.text_input("Código do item", key="cod", placeholder="Código único do item")
-
+            st.text_input("Código do item", key="abs_cod", placeholder="Código único do item")
         with st.container(border=True):
             st.markdown("**Dimensões**")
             c1, c2, c3 = st.columns(3)
-            c1.number_input("Comprimento (mm)", min_value=1, max_value=2700, step=1, key="comprimento")
-            c2.number_input("Largura (mm)", min_value=1, max_value=1700, step=1, key="largura")
-            c3.number_input("Espessura (mm)", min_value=3.0, max_value=7.0, step=0.1, format="%.1f", key="espessura")
-
+            c1.number_input("Comprimento (mm)", min_value=1, max_value=2700, step=1, key="abs_comp")
+            c2.number_input("Largura (mm)", min_value=1, max_value=1700, step=1, key="abs_larg")
+            c3.number_input("Espessura (mm)", min_value=3.0, max_value=7.0, step=0.1, format="%.1f", key="abs_esp")
         with st.container(border=True):
             st.markdown("**Material**")
             c4, c5, c6 = st.columns(3)
-            c4.selectbox("Cor", CORES, key="cor")
-            c5.selectbox("Polímero", list(POLIMEROS.keys()), key="polimero")
-            c6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0, step=0.1, format="%.3f", key="peso_liquido")
-
+            c4.selectbox("Cor", calc.CORES, key="abs_cor")
+            c5.selectbox("Polímero", list(calc.POLIMEROS), key="abs_pol")
+            c6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0, step=0.1,
+                            format="%.3f", key="abs_peso")
         with st.container(border=True):
             st.markdown("**Processo**")
             c7, c8 = st.columns(2)
-            c7.radio("Tipo de corte", ["Corte Robô", "Corte Manual"], key="corte", horizontal=True)
-            c8.radio("Conceito", ["Mesa", "Caixa"], key="conceito", horizontal=True)
+            c7.radio("Tipo de corte", ["Corte Robô", "Corte Manual"], key="abs_corte", horizontal=True)
+            c8.radio("Conceito", ["Mesa", "Caixa"], key="abs_conc", horizontal=True)
 
-        b1, b2, _ = st.columns([1.3, 1, 1.5])
-        salvar = b1.button("💾 Salvar orçamento", type="primary")
-        b2.button("Limpar", on_click=resetar_formulario)
+        if botoes("abs", PAD):
+            p = params_abs()
+            try:
+                item, _ = calc.calcular_abs(par, **p)
+                salvar("Orçamentos", p["cod_item"], {"Orçamentos": [item]},
+                       f"Orçamento **{p['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
+            except Exception as e:
+                st.error(f"Erro no cálculo: {e}")
 
-        if salvar:
-            params = ler_parametros()
-            if not params["cod_item"]:
-                st.warning("Informe o código do item.")
-            elif codigo_existe(carregar_df(), params["cod_item"]):
-                st.warning(f"Código **{params['cod_item']}** já cadastrado. Use outro código.")
-            else:
-                try:
-                    item, _ = calcular_orcamento(**params)
-                    salvar_item(item)
-                    st.toast(f"Orçamento {params['cod_item']} salvo!", icon="✅")
-                    st.success(f"Orçamento **{params['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
-                except PermissionError:
-                    st.error("Não consegui salvar: feche o orcamentos.xlsx no Excel e tente de novo.")
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
-
-    # ----- Prévia ao vivo -----
-    with col_prev:
+    with col_r:
         st.markdown("**Prévia do cálculo**")
-        params = ler_parametros()
         try:
-            prev, custos = calcular_orcamento(**params)
+            prev, custos = calc.calcular_abs(par, **params_abs())
         except Exception as e:
             prev = None
             st.warning(str(e))
-
         if prev:
-            # --- BUSCA INTELIGENTE DA CHAPA ---
-            cto, _ = tipo_conceito_params(params["conceito"])
-            comp_c_cto = params["comprimento"] + cto
-            larg_c_cto = params["largura"] + cto
-            
-            chapa_info, erro_chapa = buscar_chapa(
-                params["espessura"], 
-                params["cor"], 
-                comp_c_cto, 
-                larg_c_cto
-            )
-            
-            # Injeta os dados da chapa (ou o erro) direto no dicionário 'prev'
-            if erro_chapa:
-                prev["Chapa Código"] = "ERRO"
-                prev["Chapa Dimensão"] = erro_chapa
-            else:
-                cod, dim, esp, cor = chapa_info
-                prev["Chapa Código"] = cod
-                prev["Chapa Dimensão"] = f"{dim[0]} x {dim[1]} mm ({cor})"
-
-            # --- MÉTRICAS NA TELA ---
             m1, m2 = st.columns(2)
             m1.metric("Custo total", brl(prev["Custo Total (R$)"]))
             m2.metric("Peças por chapa", prev["Qtd Peças/Chapa"])
             m3, m4 = st.columns(2)
-            m3.metric("Peso bruto", f"{prev['Peso Bruto (kg)']:.3f} kg".replace(".", ","))
+            m3.metric("Peso bruto", num(prev["Peso Bruto (kg)"], 3) + " kg")
             m4.metric("Blank (mm)", prev["Blank (mm)"])
-
-            st.markdown("---")
             st.markdown("**Custo por etapa (R$)**")
-            df_custos = pd.DataFrame({"Etapa": list(custos.keys()), "Custo (R$)": list(custos.values())}).set_index("Etapa")
-            st.bar_chart(df_custos)
+            st.bar_chart(pd.DataFrame({"Etapa": list(custos), "Custo (R$)": list(custos.values())}).set_index("Etapa"))
+            with st.expander("Ver todos os campos"):
+                st.table(pd.DataFrame([(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"]).set_index("Campo"))
 
-            # --- TABELA DE DADOS ---
-            with st.expander("Ver todos os campos do cálculo"):
-                # Como o 'prev' já tem os dados da chapa agora, eles vão aparecer magicamente na tabela
-                detalhe = pd.DataFrame([(k, str(v)) for k, v in prev.items()], columns=["Campo", "Valor"])
-                st.table(detalhe.set_index("Campo"))
-                
-# --------------------------------- HISTÓRICO ---------------------------------
-with tab_hist:
-    df_salvo = carregar_df()
-    if df_salvo.empty:
-        st.info("Nenhum orçamento salvo ainda.")
-    else:
-        h1, h2, h3 = st.columns(3)
-        h1.metric("Orçamentos salvos", len(df_salvo))
-        h2.metric("Custo médio", brl(df_salvo["Custo Total (R$)"].mean()))
-        h3.metric("Maior custo", brl(df_salvo["Custo Total (R$)"].max()))
+# ============================== INSERTOS =====================================
+with tab_ins:
+    PAD = {"ins_cod": "", "ins_desc": "", "ins_lote": int(par.k[calc.K_LOTE])}
+    iniciar(PAD)
+    st.session_state.setdefault("ver_ins", 0)
+    s, v = st.session_state, st.session_state["ver_ins"]
+    col_f, col_r = st.columns([1.4, 1], gap="large")
 
-        st.dataframe(df_salvo, hide_index=True)
-
-        st.download_button(
-            "⬇️ Baixar planilha (.xlsx)",
-            data=ARQUIVO.read_bytes(),
-            file_name="orcamentos.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-        with st.expander("Excluir um orçamento"):
-            cod_del = st.selectbox("Código do item", df_salvo["Código Item"].astype(str).tolist())
-            if st.button("Excluir"):
-                try:
-                    excluir_item(cod_del)
-                    st.rerun()
-                except PermissionError:
-                    st.error("Feche o orcamentos.xlsx no Excel e tente de novo.")
-
-# ------------------------------- REFORÇOS (INSERTOS) -------------------------
-
-ARQUIVO_MATERIAIS = Path(__file__).parent / "materiais_reforco.xlsx"
-
-# Base inicial (extraída da planilha ORÇAMENTO INSERTOS) — usada só na 1ª execução
-MATERIAIS_INICIAIS = [
-    # (código, descrição, preço R$/un, unidade)
-    ("109299000",  "CHAPA DE ACO 1,90 x 1000 x 3000mm - NBR7008 ZEE GRAU 1 Z100", 7.31,   "kg"),
-    ("1064003000", "CHAPA DE ALUMINIO 1,50 X 1000 X 2000 mm - LIGA 1200 - H14",  28.75,  "kg"),
-    ("107679000",  "CHAPA DE ACO 1,55X1000X2680 - NBR 7008 ZEE - GRAU 2 - Z100",  6.76,   "kg"),
-    ("107676000",  "CHAPA DE ACO 1,20X1500X1795 - ST 05 Z/NBR 7008 ZEE GRAU 2,+Z", 8.54, "kg"),
-    ("106546000",  "CHAPA DE ACO 1,55mm 1200 x 3000mm NBR 7008 ZEE GR1 (Z100)",   4.2525, "kg"),
-    ("100755000",  "CHAPA DE ACO (código 100755000)",                             6.87,   "kg"),
-    ("100106000",  "CHAPA DE ACO 4,75mm FQD 1200 x 3000 - SAE 1006 DEC",          5.8373, "kg"),
-    ("109796000",  "CHAPA DE ACO (código 109796000)",                             5.0438, "kg"),
-    ("106039000",  "CHAPA DE ACO (código 106039000)",                             5.849,  "kg"),
-    ("103085000",  "CHAPA DE ACO (código 103085000)",                             4.22,   "kg"),
-    ("109389000",  "CHAPA DE ACO 1,00 x 1500 x 2700mm GI EN10346 DX56D Z140-M-C-", 6.87,  "kg"),
-    ("103209000",  "CHAPA DE ACO (código 103209000)",                             5.1084, "kg"),
-    ("106475000",  "MANTA DE ISOLAMENTO",                                         39.283, "m²"),
-    ("100634000",  "LÍQUIDO (código 100634000)",                                  23.53,  "L"),
-    ("100106000",  "CHAPA DE ACO 4,75mm FQD 1200 x 3000 - SAE 1006 DEC",          5.8373, "kg"),
-    ("107670000",  "CHAPA DE AÇO 6,35 x 1200 x 2000mm - NBR 6656 LNE-38 DECOL",   5.91,   "kg"),
-]
-
-
-def _inicializar_banco_materiais():
-    """Cria o arquivo de materiais com os dados iniciais se ainda não existir."""
-    if not ARQUIVO_MATERIAIS.exists():
-        df = pd.DataFrame(MATERIAIS_INICIAIS,
-                          columns=["Código", "Descrição", "Preço Unit. (R$)", "Un"])
-        # remove códigos duplicados mantendo o primeiro
-        df = df.drop_duplicates(subset=["Código"], keep="first").reset_index(drop=True)
-        df.to_excel(ARQUIVO_MATERIAIS, index=False)
-
-
-def carregar_materiais() -> pd.DataFrame:
-    """Retorna DataFrame com Código, Descrição, Preço Unit. (R$), Un."""
-    _inicializar_banco_materiais()
-    try:
-        df = pd.read_excel(ARQUIVO_MATERIAIS)
-        df["Código"] = df["Código"].astype(str)
-        return df
-    except Exception:
-        return pd.DataFrame(MATERIAIS_INICIAIS,
-                            columns=["Código", "Descrição", "Preço Unit. (R$)", "Un"])
-
-
-def adicionar_material(codigo: str, descricao: str, preco: float, unidade: str) -> bool:
-    """Adiciona material ao banco. Retorna False se o código já existir."""
-    df = carregar_materiais()
-    if str(codigo) in df["Código"].values:
-        return False
-    novo = pd.DataFrame([{
-        "Código": str(codigo),
-        "Descrição": descricao,
-        "Preço Unit. (R$)": float(preco),
-        "Un": unidade,
-    }])
-    df = pd.concat([df, novo], ignore_index=True)
-    df.to_excel(ARQUIVO_MATERIAIS, index=False)
-    return True
-
-
-with tab_reforco:
-    st.markdown("### 🔩 Reforços / Insertos")
-    st.caption("Selecione o material no catálogo — o preço é preenchido automaticamente.")
-
-    centros = carregar_centros_custo()
-    grupos = carregar_grupos_maquina()
-    df_materiais = carregar_materiais()
-
-    # Mapeamento código -> (descrição, preço, unidade) para lookup rápido
-    mapa_materiais = {
-        str(row["Código"]): (row["Descrição"], float(row["Preço Unit. (R$)"]), row["Un"])
-        for _, row in df_materiais.iterrows()
-    }
-
-    # -------- Painel para cadastrar novo material (expansível) --------
-    with st.expander("➕ Cadastrar novo material no banco"):
-        with st.form("form_novo_material", clear_on_submit=True):
-            c1, c2, c3, c4 = st.columns([1.2, 2.5, 1, 1])
-            novo_cod = c1.text_input("Código")
-            nova_desc = c2.text_input("Descrição")
-            novo_preco = c3.number_input("Preço (R$)", min_value=0.0, value=0.0, format="%.4f")
-            nova_un = c4.selectbox("Unidade", ["kg", "m²", "L", "un", "m"])
-            salvar_mat = st.form_submit_button("Salvar material", type="primary")
-
-        if salvar_mat:
-            if not novo_cod.strip() or not nova_desc.strip():
-                st.warning("Preencha código e descrição.")
-            elif adicionar_material(novo_cod.strip(), nova_desc.strip(), novo_preco, nova_un):
-                st.success(f"Material **{novo_cod}** adicionado ao banco.")
-                st.rerun()
-            else:
-                st.warning(f"Código **{novo_cod}** já existe no banco.")
-
-    st.divider()
-
-    # -------- Lista de códigos com "—" (vazio) no topo --------
-    opcoes_material = ["— selecione —"] + [
-        f"{cod} | {desc} | R$ {preco:.4f}/{un}"
-        for cod, (desc, preco, un) in mapa_materiais.items()
-    ]
-    codigos_ordenados = ["— selecione —"] + sorted(mapa_materiais.keys())
-
-    # -------- 1) Matéria-prima --------
-    st.markdown("**1) Matéria-prima**")
-    n_mp = st.number_input("Quantas linhas de matéria-prima?",
-                           min_value=1, max_value=20, value=1, step=1, key="n_mp")
-
-    materiais_input = []
-    for i in range(int(n_mp)):
+    with col_f:
         with st.container(border=True):
-            st.markdown(f"*Linha {i+1}*")
-            c1, c2, c3 = st.columns([3, 1, 1])
-            sel_idx = c1.selectbox(
-                "Material",
-                options=range(len(opcoes_material)),
-                format_func=lambda j: opcoes_material[j],
-                key=f"mp_sel_{i}",
-            )
-            qtd = c2.number_input("Qtd", min_value=0.0, value=0.0,
-                                  step=0.01, key=f"mp_qtd_{i}")
-            # Mostra preço/unidade do material selecionado
-            if sel_idx > 0:
-                cod_sel = codigos_ordenados[sel_idx]
-                desc, preco, un = mapa_materiais[cod_sel]
-                c3.metric(f"R$/{un}", f"{preco:.4f}")
-                if qtd > 0:
-                    st.caption(f"Subtotal: **{brl(qtd * preco)}**")
-                materiais_input.append((cod_sel, desc, preco, qtd, un))
-            else:
-                c3.metric("R$/un", "—")
-                if qtd > 0:
-                    st.caption("⚠ Selecione um material para calcular.")
+            st.markdown("**Identificação**")
+            i1, i2, i3 = st.columns([1, 2, 1])
+            i1.text_input("Código do item", key="ins_cod")
+            i2.text_input("Descrição da peça", key="ins_desc")
+            i3.number_input("Lote econômico (pç)", min_value=1, step=10, key="ins_lote")
 
-    # -------- 2) Operações externas (terceiros) --------
-    st.markdown("**2) Operações externas (terceiros)**")
-    n_ter = st.number_input("Quantas linhas de terceiros?",
-                            min_value=0, max_value=10, value=0, step=1, key="n_ter")
-    terceiros_input = []
-    for i in range(int(n_ter)):
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([1.5, 2.5, 1, 1])
-            cod = c1.text_input("Código", key=f"ter_cod_{i}")
-            desc = c2.text_input("Descrição", key=f"ter_desc_{i}")
-            qtd = c3.number_input("Qtd", min_value=0.0, value=1.0, key=f"ter_qtd_{i}")
-            preco = c4.number_input("Preço unit. (R$)", min_value=0.0,
-                                    value=0.0, key=f"ter_preco_{i}")
-            terceiros_input.append((cod, desc, qtd, preco))
-
-    # -------- 3) Processo de fabricação (mão-de-obra) --------
-    st.markdown("**3) Processo de fabricação (mão-de-obra)**")
-    n_op = st.number_input("Quantas operações?", min_value=1, max_value=20,
-                           value=1, step=1, key="n_op")
-
-    opcoes_cc = {f"{k} - {v[0]} (R$ {v[1]:.2f}/h)": (k, v[1])
-                 for k, v in sorted(centros.items())}
-    operacoes_input = []
-    for i in range(int(n_op)):
-        with st.container(border=True):
-            st.markdown(f"*Operação {i+1}*")
-            c1, c2, c3 = st.columns([1, 3, 2])
-            num_op = c1.number_input("Nº op.", min_value=1, value=10 * (i + 1),
-                                     step=10, key=f"op_num_{i}")
-            descricao = c2.text_input("Descrição da operação", key=f"op_desc_{i}")
-            cc_label = c3.selectbox("Centro de custo",
-                                    list(opcoes_cc.keys()), key=f"op_cc_{i}")
-            c4, c5, c6, c7 = st.columns(4)
-            grupo_maq = c4.selectbox("Grupo máquina", grupos, key=f"op_grupo_{i}")
-            setup = c5.number_input("Setup (min)", min_value=0.0, value=0.0,
-                                    key=f"op_setup_{i}")
-            tempo = c6.number_input("Tempo op. (min)", min_value=0.0, value=0.0,
-                                    key=f"op_tempo_{i}")
-            homens = c7.number_input("Nº homens", min_value=1, value=1,
-                                     key=f"op_homens_{i}")
-            operacoes_input.append((
-                int(num_op), descricao, opcoes_cc[cc_label][0],
-                setup, tempo, int(homens),
-            ))
-
-    st.divider()
-
-    if st.button("🔍 Calcular reforço", type="primary", use_container_width=True):
-        res = calcular_reforco(
-            cod_item="—",
-            materiais=materiais_input,
-            terceiros=terceiros_input,
-            operacoes=operacoes_input,
-        )
-
-        st.markdown("#### Resultado")
-        k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("Matéria-prima", brl(res["total_materia_prima"]))
-        k2.metric("Terceiros", brl(res["total_terceiros"]))
-        k3.metric("Setup", brl(res["total_setup"]))
-        k4.metric("Operação", brl(res["total_operacao"]))
-        k5.metric("**Custo total**", brl(res["custo_total"]))
-
-        if res["linhas_materiais"]:
             st.markdown("**Matéria-prima**")
-            df_mp = pd.DataFrame(res["linhas_materiais"])
-            df_mp["Total (R$)"] = df_mp["Total (R$)"].map(brl)
-            df_mp["Preço Unit. (R$)"] = df_mp["Preço Unit. (R$)"].map(
-                lambda v: f"{v:.4f}"
-            )
-            st.dataframe(df_mp, hide_index=True, use_container_width=True)
+            st.caption("Escolha o material e a quantidade (na unidade do material: kg, M², L). "
+                       "Preço vazio = usa o da aba Parâmetros.")
+            mp = st.data_editor(
+                tabela_vazia(**{"Material": "object", "Qtd": "float64", "Preço unit. (R$)": "float64"}),
+                num_rows="dynamic", hide_index=True, key=f"ins_mp_{v}",
+                column_config={"Material": st.column_config.SelectboxColumn("Material", options=materiais, width="large"),
+                               "Qtd": cfg_num("Qtd", format="%.4f"),
+                               "Preço unit. (R$)": cfg_num("Preço unit. (R$)", format="%.4f")})
 
-        if res["linhas_terceiros"]:
-            st.markdown("**Terceiros**")
-            st.dataframe(pd.DataFrame(res["linhas_terceiros"]),
-                         hide_index=True, use_container_width=True)
+        with st.container(border=True):
+            st.markdown("**Operações (roteiro)**")
+            st.caption("O centro de custo vem da operação. Setup é dividido pelo lote; tempo é multiplicado pelo nº de homens.")
+            ops = st.data_editor(
+                tabela_vazia(**{"Operação": "object", "Setup (min)": "float64", "Tempo (min)": "float64", "Nº homens": "float64"}),
+                num_rows="dynamic", hide_index=True, key=f"ins_ops_{v}",
+                column_config={"Operação": st.column_config.SelectboxColumn("Operação", options=operacoes, width="large"),
+                               "Setup (min)": cfg_num("Setup (min)"), "Tempo (min)": cfg_num("Tempo (min)"),
+                               "Nº homens": cfg_num("Nº homens", help="Vazio = 1")})
 
-        if res["linhas_operacoes"]:
-            st.markdown("**Operações**")
-            df_op = pd.DataFrame(res["linhas_operacoes"])
-            for col in ["Custo Hora (R$)", "R$ Setup", "R$ Operação"]:
-                df_op[col] = df_op[col].map(brl)
-            st.dataframe(df_op, hide_index=True, use_container_width=True)
+        with st.expander("Terceiros, ferramental e ensaios (opcional)"):
+            st.markdown("**Operações externas (terceiros)**")
+            terc = st.data_editor(
+                tabela_vazia(**{"Descrição": "object", "Fornecedor": "object", "Qtd": "float64", "Preço unit. (R$)": "float64"}),
+                num_rows="dynamic", hide_index=True, key=f"ins_terc_{v}",
+                column_config={"Qtd": cfg_num("Qtd"), "Preço unit. (R$)": cfg_num("Preço unit. (R$)", format="%.4f")})
+            st.markdown("**Ferramental** (fora do custo da peça)")
+            ferram = st.data_editor(
+                tabela_vazia(**{"Descrição": "object", "Valor (R$)": "float64"}),
+                num_rows="dynamic", hide_index=True, key=f"ins_ferr_{v}",
+                column_config={"Valor (R$)": cfg_num("Valor (R$)")})
+            st.markdown("**Ensaios** (fora do custo da peça)")
+            ensaios = st.data_editor(
+                tabela_vazia(**{"Descrição": "object", "Valor (R$)": "float64"}),
+                num_rows="dynamic", hide_index=True, key=f"ins_ens_{v}",
+                column_config={"Valor (R$)": cfg_num("Valor (R$)")})
 
-        st.info(f"💡 Custo total do reforço: **{brl(res['custo_total'])}**")
+        try:
+            resumo, det = calc.calcular_insertos(par, mp, terc, ops, ferram, ensaios, s["ins_lote"])
+            erro = None
+        except Exception as e:
+            resumo = det = None
+            erro = str(e)
 
-# ---------------------------------- MONTAGEM ---------------------------------
-with tab_montagem:
-    st.markdown("### 🛠 Montagem")
-    st.caption("Custo de montagem pelo custo-hora do setor")
+        if botoes("ins", PAD, "ver_ins"):
+            if erro:
+                st.error(f"Erro no cálculo: {erro}")
+            elif resumo["Custo da Peça (R$)"] <= 0:
+                st.warning("Adicione matéria-prima ou operações antes de salvar.")
+            else:
+                cod = s["ins_cod"].strip()
+                salvar("Insertos", cod,
+                       {"Insertos": [calc.linha_insertos(cod, s["ins_desc"], s["ins_lote"], resumo)],
+                        "Insertos - Detalhe": calc.detalhe_insertos(cod, det)},
+                       f"Orçamento **{cod}** salvo: {brl(resumo['Custo da Peça (R$)'])}")
 
-    centros = carregar_centros_custo()
-    opcoes_cc = {f"{k} - {v[0]}  (R$ {v[1]:.2f}/h)": k for k, v in sorted(centros.items())}
+    with col_r:
+        st.markdown("**Prévia do cálculo**")
+        if erro:
+            st.warning(erro)
+        else:
+            m1, m2 = st.columns(2)
+            m1.metric("Custo da peça", brl(resumo["Custo da Peça (R$)"]))
+            m2.metric("Matéria-prima", brl(resumo["Matéria-prima (R$)"]))
+            m3, m4 = st.columns(2)
+            m3.metric("Terceiros", brl(resumo["Terceiros (R$)"]))
+            m4.metric("Mão de obra (tempo + setup)",
+                      brl(resumo["Mão de obra - tempo (R$)"] + resumo["Mão de obra - setup (R$)"]))
+            st.markdown("**Composição do custo (R$)**")
+            comp = {"Matéria-prima": resumo["Matéria-prima (R$)"], "Terceiros": resumo["Terceiros (R$)"],
+                    "MO - tempo": resumo["Mão de obra - tempo (R$)"], "MO - setup": resumo["Mão de obra - setup (R$)"]}
+            st.bar_chart(pd.DataFrame({"Bloco": list(comp), "R$": list(comp.values())}).set_index("Bloco"))
+            st.caption(f"Ferramental: {brl(resumo['Ferramental (R$)'])} · Ensaios: {brl(resumo['Ensaios (R$)'])} "
+                       "(não entram no custo da peça)")
+            if not det["ops"].empty:
+                with st.expander("Custo por operação"):
+                    st.dataframe(det["ops"][["Operação", "C.C.", "R$/h", "Custo setup (R$)", "Custo tempo (R$)"]],
+                                 hide_index=True)
 
-    with st.form("form_montagem"):
-        c1, c2, c3 = st.columns(3)
-        cc_label = c1.selectbox("Centro de custo / setor", list(opcoes_cc.keys()))
-        tempo = c2.number_input("Tempo de montagem (min)", min_value=0.0, value=10.0, step=1.0)
-        homens = c3.number_input("Nº de homens", min_value=1, max_value=20, value=1, step=1)
-        calc = st.form_submit_button("Calcular montagem", type="primary")
+# =============================== PINTURA =====================================
+with tab_pin:
+    PAD = {"pin_cod": "", "pin_mar": "", "pin_comp": 500.0, "pin_larg": 300.0, "pin_area": 0.0,
+           "pin_tinta": tintas[0], "pin_lados": 1}
+    iniciar(PAD)
+    s = st.session_state
+    if s["pin_tinta"] not in tintas:
+        s["pin_tinta"] = tintas[0]
+    col_f, col_r = st.columns([1.1, 1], gap="large")
 
-    if calc:
-        res = calcular_montagem(opcoes_cc[cc_label], tempo, int(homens))
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Custo-hora", brl(res["custo_hora"]))
-        m2.metric("Tempo × homens", f"{tempo:.0f} min × {homens}")
-        m3.metric("**Custo de montagem**", brl(res["custo_montagem"]))
-        with st.expander("Detalhes"):
-            st.json(res)
+    def params_pin():
+        return dict(cod_item=s["pin_cod"].strip(), cod_marcopolo=s["pin_mar"].strip(),
+                    comprimento=s["pin_comp"], largura=s["pin_larg"], area_manual=s["pin_area"],
+                    tinta=s["pin_tinta"], lados=s["pin_lados"])
 
-# ----------------------------------- PINTURA ---------------------------------
-with tab_pintura:
-    st.markdown("### 🎨 Pintura")
-    st.caption("Custo de tinta + mão-de-obra por lado")
+    with col_f:
+        with st.container(border=True):
+            st.markdown("**Identificação**")
+            p1, p2 = st.columns(2)
+            p1.text_input("Código Amalcaburio", key="pin_cod")
+            p2.text_input("Código Marcopolo (opcional)", key="pin_mar")
+        with st.container(border=True):
+            st.markdown("**Peça**")
+            st.info("Use a medida **real** da peça, sem os 200 mm de cada lado do blank.")
+            q1, q2, q3 = st.columns(3)
+            q1.number_input("Comprimento (mm)", min_value=0.0, step=1.0, key="pin_comp")
+            q2.number_input("Largura (mm)", min_value=0.0, step=1.0, key="pin_larg")
+            q3.number_input("Área manual (mm²)", min_value=0.0, step=100.0, key="pin_area",
+                            help="Para peças irregulares. Deixe 0 para usar comprimento × largura.")
+        with st.container(border=True):
+            st.markdown("**Tinta**")
+            r1, r2 = st.columns(2)
+            r1.selectbox("Tinta / cor", tintas, key="pin_tinta")
+            r2.radio("Lados pintados", [1, 2], key="pin_lados", horizontal=True)
 
-    cores_pintura = sorted(PRECO_TINTA.keys())
+        if botoes("pin", PAD):
+            p = params_pin()
+            try:
+                linha = calc.calcular_pintura(par, **p)
+                salvar("Pintura", p["cod_item"], {"Pintura": [linha]},
+                       f"Orçamento **{p['cod_item']}** salvo: {brl(linha['Custo Total (R$)'])}")
+            except Exception as e:
+                st.error(f"Erro no cálculo: {e}")
 
-    with st.form("form_pintura"):
-        c1, c2, c3, c4 = st.columns(4)
-        comp = c1.number_input("Comprimento (mm)", min_value=1, value=500, step=1)
-        larg = c2.number_input("Largura (mm)", min_value=1, value=400, step=1)
-        cor_sel = c3.selectbox("Cor / acabamento", cores_pintura)
-        lados = c4.radio("Lados", [1, 2], horizontal=True, index=1)
-        calc_pint = st.form_submit_button("Calcular pintura", type="primary")
+    with col_r:
+        st.markdown("**Prévia do cálculo**")
+        try:
+            pv = calc.calcular_pintura(par, **params_pin())
+        except Exception as e:
+            pv = None
+            st.warning(str(e))
+        if pv:
+            m1, m2 = st.columns(2)
+            m1.metric("Custo total", brl(pv["Custo Total (R$)"]))
+            m2.metric("Custo de 1 lado", brl(pv["Custo 1 Lado (R$)"]))
+            m3, m4 = st.columns(2)
+            m3.metric("Tinta", num(pv["Tinta (L)"], 4) + " L")
+            m4.metric("Tempo de pintura", num(pv["Tempo Pintura (min)"]) + " min")
+            st.caption(f"Área: {num(pv['Área (m²)'], 4)} m²")
 
-    if calc_pint:
-        res = calcular_pintura(comp, larg, cor_sel, int(lados))
-        p1, p2, p3, p4 = st.columns(4)
-        p1.metric("Área", f"{res['area_mm2']:,.0f} mm²".replace(",", "."))
-        p2.metric("Tinta", f"{res['tinta_ml']:.2f} mL")
-        p3.metric("Catalisador", f"{res['catalisador_l']:.4f} L")
-        p4.metric("Tempo pintura", f"{res['tempo_pintura_min']:.2f} min")
+# ============================== MONTAGEM =====================================
+with tab_mon:
+    padrao_cc = int(par.k[calc.K_MONT_CC])
+    PAD = {"mon_cod": "", "mon_modo": "Tempo × centro de custo", "mon_tempo": 8.0, "mon_homens": 1,
+           "mon_cc": padrao_cc if padrao_cc in centros else centros[0], "mon_valor": 0.0}
+    iniciar(PAD)
+    s = st.session_state
+    if s["mon_cc"] not in centros:
+        s["mon_cc"] = centros[0]
+    col_f, col_r = st.columns([1.1, 1], gap="large")
 
-        q1, q2, q3, q4 = st.columns(4)
-        q1.metric("Preço tinta (R$/L)", brl(res["preco_tinta_l"]))
-        q2.metric("Custo tinta", brl(res["custo_tinta"]))
-        q3.metric("Custo mão-de-obra", brl(res["custo_mao_obra"]))
-        q4.metric(f"**Custo {lados} lado(s)**",
-                  brl(res["custo_dois_lados"] if lados == 2 else res["custo_um_lado"]))
+    def params_mon():
+        return dict(cod_item=s["mon_cod"].strip(), modo=s["mon_modo"], tempo=s["mon_tempo"],
+                    homens=s["mon_homens"], cc=s["mon_cc"], valor_direto=s["mon_valor"])
 
-        with st.expander("Detalhes do cálculo"):
-            st.json(res)
+    with col_f:
+        with st.container(border=True):
+            st.markdown("**Identificação**")
+            st.text_input("Código do item", key="mon_cod")
+        with st.container(border=True):
+            st.markdown("**Montagem**")
+            st.radio("Como informar", ["Tempo × centro de custo", "Valor direto (R$)"], key="mon_modo", horizontal=True)
+            if s["mon_modo"] == "Valor direto (R$)":
+                st.number_input("Valor da montagem (R$)", min_value=0.0, step=1.0, key="mon_valor")
+            else:
+                t1, t2 = st.columns(2)
+                t1.number_input("Tempo de montagem (min)", min_value=0.0, step=0.5, key="mon_tempo")
+                t2.number_input("Nº de homens", min_value=1, step=1, key="mon_homens")
+                st.selectbox("Centro de custo", centros, format_func=lambda x: nome_cc.get(x, str(x)), key="mon_cc")
+        if botoes("mon", PAD):
+            p = params_mon()
+            try:
+                linha = calc.calcular_montagem(par, **p)
+                salvar("Montagem", p["cod_item"], {"Montagem": [linha]},
+                       f"Montagem **{p['cod_item']}** salva: {brl(linha['Custo Montagem (R$)'])}")
+            except Exception as e:
+                st.error(f"Erro no cálculo: {e}")
 
-#----------------------------------- ENGENHARIA ---------------------------------
+    with col_r:
+        st.markdown("**Prévia do cálculo**")
+        try:
+            mv = calc.calcular_montagem(par, **params_mon())
+            st.metric("Custo de montagem", brl(mv["Custo Montagem (R$)"]))
+            st.caption("Some ao custo da peça na aba Histórico → Resumo por código (mesmo código do item).")
+        except Exception as e:
+            st.warning(str(e))
 
-with tab_eng:
-    st.markdown("### 📐 Cálculos de Engenharia")
-    st.caption("Pesos, desenvolvimento de chapa, conversões, prensa, volume.")
+# ================================= PESO ======================================
+with tab_peso:
+    PAD = {"peso_esp": 4.0, "peso_larg": 15.0, "peso_comp": 550.0, "peso_tipo": "ABS"}
+    iniciar(PAD)
+    s = st.session_state
+    col_f, col_r = st.columns([1.1, 1], gap="large")
+    with col_f:
+        with st.container(border=True):
+            st.markdown("**Peso de peça plástica (consulta rápida, não salva)**")
+            w1, w2, w3 = st.columns(3)
+            w1.number_input("Espessura (mm)", min_value=0.0, step=0.5, key="peso_esp")
+            w2.number_input("Largura (mm)", min_value=0.0, step=1.0, key="peso_larg")
+            w3.number_input("Comprimento (mm)", min_value=0.0, step=1.0, key="peso_comp")
+            st.radio("Material", list(calc.DENSIDADES_PESO), key="peso_tipo", horizontal=True)
+    with col_r:
+        st.markdown("**Resultado**")
+        peso, peso30 = calc.calcular_peso(s["peso_esp"], s["peso_larg"], s["peso_comp"], s["peso_tipo"])
+        m1, m2 = st.columns(2)
+        m1.metric("Peso da peça", num(peso, 3) + " kg")
+        m2.metric("Peso + 30%", num(peso30, 3) + " kg")
 
-    sub_peso, sub_chapa, sub_conv, sub_misc = st.tabs([
-        "Pesos de matéria-prima", "Desenvolvimento de chapa",
-        "Conversões", "Prensa / Volume"
-    ])
+# =============================== HISTÓRICO ===================================
+with tab_hist:
+    ABAS = {"ABS": ("Orçamentos", "Custo Total (R$)"), "Insertos": ("Insertos", "Custo da Peça (R$)"),
+            "Pintura": ("Pintura", "Custo Total (R$)"), "Montagem": ("Montagem", "Custo Montagem (R$)")}
+    escolha = st.radio("Ver", list(ABAS) + ["Resumo por código"], horizontal=True, key="hist_aba")
 
-    with sub_peso:
-        tipo = st.selectbox("Tipo de material", [
-            "Tubo redondo", "Tubo quadrado", "Tubo retangular",
-            "Barra redonda", "Barra quadrada", "Barra sextavada",
-            "Chapa circular", "Chapa plástica", "Plástico bolha",
-        ], key="eng_tipo_peso")
+    if escolha == "Resumo por código":
+        partes = []
+        for nome, (aba, col) in ABAS.items():
+            df = d.carregar(aba)
+            if not df.empty:
+                partes.append(df[["Código Item", col]].rename(columns={col: f"{nome} (R$)"}))
+        if partes:
+            resumo_cod = pd.concat(partes).groupby("Código Item", as_index=False).sum(min_count=1)
+            resumo_cod["Total (R$)"] = resumo_cod.drop(columns="Código Item").sum(axis=1)
+            st.dataframe(resumo_cod, hide_index=True)
+        else:
+            st.info("Nenhum orçamento salvo ainda.")
+    else:
+        aba, col_custo = ABAS[escolha]
+        df = d.carregar(aba)
+        if df.empty:
+            st.info("Nenhum orçamento salvo nesta aba ainda.")
+        else:
+            h1, h2, h3 = st.columns(3)
+            h1.metric("Orçamentos salvos", len(df))
+            h2.metric("Custo médio", brl(df[col_custo].mean()))
+            h3.metric("Maior custo", brl(df[col_custo].max()))
+            st.dataframe(df, hide_index=True)
 
-        if tipo == "Tubo redondo":
-            c1, c2, c3 = st.columns(3)
-            d = c1.number_input("Diâmetro externo (mm)", value=30.0, key="eng_tr_d")
-            e = c2.number_input("Espessura (mm)", value=2.0, key="eng_tr_e")
-            L = c3.number_input("Comprimento (mm)", value=1395.0, key="eng_tr_L")
-            st.metric("Peso", f"{peso_tubo_redondo(d, e, L):.3f} kg")
+            codigos = df["Código Item"].astype(str).tolist()
+            if escolha == "Insertos":
+                with st.expander("Ver composição de um orçamento"):
+                    cod_v = st.selectbox("Código do item", codigos, key="hist_ver")
+                    det_df = d.carregar("Insertos - Detalhe")
+                    if not det_df.empty:
+                        st.dataframe(det_df[det_df["Código Item"].astype(str) == cod_v], hide_index=True)
 
-        elif tipo == "Tubo quadrado":
-            c1, c2, c3 = st.columns(3)
-            lado = c1.number_input("Lado (mm)", value=30.0, key="eng_tq_lado")
-            e = c2.number_input("Espessura (mm)", value=3.0, key="eng_tq_e")
-            L = c3.number_input("Comprimento (mm)", value=6000.0, key="eng_tq_L")
-            st.metric("Peso", f"{peso_tubo_quadrado(lado, e, L):.3f} kg")
+            with st.expander("Excluir um orçamento"):
+                cod_x = st.selectbox("Código do item", codigos, key="hist_del")
+                apagar = st.button("Excluir", key="hist_excluir")
+                if apagar:
+                    try:
+                        d.excluir(aba, cod_x)
+                    except PermissionError:
+                        st.error("Feche o orcamentos.xlsx no Excel e tente de novo.")
+                        apagar = False
+                if apagar:
+                    st.rerun()
 
-        elif tipo == "Tubo retangular":
-            c1, c2, c3, c4 = st.columns(4)
-            b = c1.number_input("Base (mm)", value=30.0, key="eng_tret_b")
-            h = c2.number_input("Altura (mm)", value=60.0, key="eng_tret_h")
-            e = c3.number_input("Espessura (mm)", value=3.0, key="eng_tret_e")
-            L = c4.number_input("Comprimento (mm)", value=6000.0, key="eng_tret_L")
-            st.metric("Peso", f"{peso_tubo_retangular(b, h, e, L):.3f} kg")
+    if d.ARQ_ORC.exists():
+        st.download_button("⬇️ Baixar planilha completa (.xlsx)", data=d.ARQ_ORC.read_bytes(),
+                           file_name="orcamentos.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-        elif tipo == "Barra redonda":
-            c1, c2 = st.columns(2)
-            d = c1.number_input("Diâmetro (mm)", value=131.0, key="eng_br_d")
-            L = c2.number_input("Comprimento (mm)", value=24.0, key="eng_br_L")
-            st.metric("Peso", f"{peso_barra_redonda(d, L):.3f} kg")
+# =============================== PARÂMETROS ==================================
+with tab_par:
+    st.caption("Preços, taxas e constantes usados em todos os cálculos. Ficam em parametros.xlsx.")
+    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes"])
+    novas = {}
+    with sub[0]:
+        novas["Centros de custo"] = st.data_editor(par.centros, num_rows="dynamic", hide_index=True, key="par_cc")
+    with sub[1]:
+        novas["Materiais"] = st.data_editor(par.materiais, num_rows="dynamic", hide_index=True, key="par_mat")
+    with sub[2]:
+        novas["Tintas"] = st.data_editor(par.tintas, num_rows="dynamic", hide_index=True, key="par_tinta")
+    with sub[3]:
+        st.caption("Cada operação já define o centro de custo (C.C.) usado no cálculo.")
+        novas["Operações"] = st.data_editor(par.operacoes, num_rows="dynamic", hide_index=True, key="par_ops")
+    with sub[4]:
+        const = pd.DataFrame({"Parâmetro": list(par.k), "Valor": list(par.k.values())})
+        obs = dict(d._padrao()["Constantes"][["Parâmetro", "Obs."]].values)
+        const["Obs."] = const["Parâmetro"].map(obs)
+        novas["Constantes"] = st.data_editor(
+            const, hide_index=True, key="par_const", disabled=["Parâmetro", "Obs."], num_rows="fixed",
+            column_config={"Valor": st.column_config.NumberColumn("Valor", format="%g")})
 
-        elif tipo == "Barra quadrada":
-            c1, c2 = st.columns(2)
-            b = c1.number_input("Base (mm)", value=27.5, key="eng_bq_b")
-            L = c2.number_input("Comprimento (mm)", value=48.0, key="eng_bq_L")
-            st.metric("Peso", f"{peso_barra_quadrada(b, L):.3f} kg")
-
-        elif tipo == "Barra sextavada":
-            c1, c2 = st.columns(2)
-            d = c1.number_input("Diâmetro (mm)", value=12.7, key="eng_bs_d")
-            L = c2.number_input("Comprimento (mm)", value=1000.0, key="eng_bs_L")
-            st.metric("Peso", f"{peso_barra_sextavada(d, L):.3f} kg")
-
-        elif tipo == "Chapa circular":
-            c1, c2 = st.columns(2)
-            d = c1.number_input("Diâmetro (mm)", value=134.0, key="eng_cc_d")
-            e = c2.number_input("Espessura (mm)", value=4.0, key="eng_cc_e")
-            st.metric("Peso", f"{peso_chapa_circular(d, e):.3f} kg")
-
-        elif tipo == "Chapa plástica":
-            c1, c2, c3, c4 = st.columns(4)
-            t = c1.selectbox("Tipo", ["ABS", "PEAD", "PP"], key="eng_cp_tipo")
-            e = c2.number_input("Espessura (mm)", value=4.0, key="eng_cp_e")
-            w = c3.number_input("Largura (mm)", value=50.0, key="eng_cp_w")
-            L = c4.number_input("Comprimento (mm)", value=515.0, key="eng_cp_L")
-            st.metric("Peso", f"{peso_chapa_plastica(e, w, L, t):.3f} kg")
-
-        elif tipo == "Plástico bolha":
-            c1, c2 = st.columns(2)
-            L = c1.number_input("Comprimento (mm)", value=2853.0, key="eng_pb_L")
-            w = c2.number_input("Largura (mm)", value=1500.0, key="eng_pb_w")
-            st.metric("Peso", f"{peso_plastico_bolha(L, w):.4f} kg")
-
-    with sub_chapa:
-        st.markdown("**Desenvolvimento de chapas dobradas**")
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
-        ang = c1.number_input("Ângulo (°)", value=90.0, key="eng_dev_ang")
-        e = c2.number_input("Espessura (mm)", value=3.0, key="eng_dev_e")
-        a = c3.number_input("a (mm)", value=20.0, key="eng_dev_a")
-        b = c4.number_input("b (mm)", value=32.0, key="eng_dev_b")
-        coef = c5.number_input("Coef.", value=3.0, key="eng_dev_coef")
-        r = c6.number_input("Raio (mm)", value=6.0, key="eng_dev_r")
-        st.metric("Comprimento necessário", f"{desenvolvimento_chapa(ang, e, a, b, coef, r):.2f} mm")
-
-        st.markdown("**Raio médio da dobra**")
-        c1, c2 = st.columns(2)
-        rmed = c1.number_input("Raio médio (mm)", value=147.0, key="eng_rmed")
-        ang2 = c2.number_input("Ângulo (°)", value=90.0, key="eng_ang2")
-        st.metric("Comprimento da dobra", f"{comprimento_dobra_raio_medio(rmed, ang2):.2f} mm")
-
-    with sub_conv:
-        st.markdown("**Ø → Perímetro**")
-        c1, c2 = st.columns(2)
-        d = c1.number_input("Diâmetro externo (mm)", value=900.0, key="eng_conv_d")
-        e = c2.number_input("Espessura (mm)", value=25.4, key="eng_conv_e")
-        st.json(diametro_para_perimetro(d, e))
-
-        st.markdown("**Perímetro → Ø**")
-        c1, c2 = st.columns(2)
-        p = c1.number_input("Perímetro externo (mm)", value=2827.43, key="eng_conv_p")
-        e2 = c2.number_input("Espessura (mm)", value=25.4, key="eng_conv_e2")
-        st.json(perimetro_para_diametro(p, e2))
-
-    with sub_misc:
-        st.markdown("**Definir prensa (tonelagem)**")
-        c1, c2, c3 = st.columns(3)
-        w = c1.number_input("Largura peça (mm)", value=200.0, key="eng_pr_w")
-        L = c2.number_input("Comprimento peça (mm)", value=200.0, key="eng_pr_L")
-        e = c3.number_input("Espessura (mm)", value=2.0, key="eng_pr_e")
-        st.metric("Prensa necessária", f"{tonelagem_prensa(w, L, e):.1f} Toneladas")
-
-        st.markdown("**Volume de recipiente**")
-        c1, c2, c3 = st.columns(3)
-        comp = c1.number_input("Comprimento (mm)", value=500.0, key="eng_vol_c")
-        larg = c2.number_input("Largura (mm)", value=200.0, key="eng_vol_l")
-        alt = c3.number_input("Altura (mm)", value=100.0, key="eng_vol_a")
-        st.metric("Volume", f"{volume_recipiente(comp, larg, alt):.2f} L")
-
-with tab_aprov:
-    st.markdown("### ✂️ Aproveitamento de chapa")
-    st.caption("Calcule quantas peças cabem na chapa, o peso unitário da peça e o retalho rateado.")
-
-    with st.form("form_aprov"):
-        st.markdown("**1) Dados da Chapa**")
-        c1, c2, c3 = st.columns(3)
-        e_chapa = c1.number_input("Espessura chapa (mm)", value=1.5, key="ap_e_chapa")
-        l_chapa = c2.number_input("Largura chapa (mm)", value=1000.0, key="ap_l_chapa")
-        c_chapa = c3.number_input("Comprimento chapa (mm)", value=2810.0, key="ap_c_chapa")
-        
-        st.markdown("**2) Dados da Peça**")
-        c4, c5, c6, c7 = st.columns(4)
-        e_peca = c4.number_input("Espessura peça (mm)", value=1.5, key="ap_e_peca")
-        l_peca = c5.number_input("Largura peça (mm)", value=453.0, key="ap_l_peca")
-        c_peca = c6.number_input("Comprimento peça (mm)", value=496.0, key="ap_c_peca")
-        qtd_blank = c7.number_input("Qtd peças / blank", min_value=1, value=1, key="ap_qtd_blank")
-        
-        calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
-
-    if calc:
-        r = aproveitamento_chapa(e_chapa, l_chapa, c_chapa,
-                                 e_peca, l_peca, c_peca, int(qtd_blank))
-        
-        # --- MÉTRICAS PRINCIPAIS (Por Peça) ---
-        st.markdown("#### Resultados (Por Peça)")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Peso da Peça", f"{r['peso_peca_kg']:.3f} kg")
-        m2.metric("Retalho por Peça", f"{r['retalho_por_peca_kg']:.3f} kg")
-        m3.metric("Peças na Chapa", r["total_pecas"])
-        m4.metric("Aproveitamento", f"{r['aproveitamento_pct']}%")
-
-        # --- DETALHES ---
-        st.markdown("---")
-        st.markdown("#### Detalhamento do Aproveitamento")
-        
-        # Recriando a tabela da planilha
-        detalhes = {
-            "Item": [
-                "Peso da chapa inteira",
-                "Peso total de todas as peças",
-                "Peso do retalho total",
-                "Modelo Vencedor",
-                "Tiras por chapa",
-                "Peças por tira",
-                "Peças por blank"
-            ],
-            "Valor": [
-                f"{r['peso_chapa_kg']:.3f} kg",
-                f"{r['peso_total_pecas_kg']:.3f} kg",
-                f"{r['retalho_total_kg']:.3f} kg",
-                r["escolhido"],
-                r["n_tiras"],
-                r["n_pecas_por_tira"],
-                r["qtd_pecas_por_blank"]
-            ]
-        }
-        st.table(pd.DataFrame(detalhes).set_index("Item"))
-
-        # --- RESUMO NARRATIVO ---
-        st.info(
-            f"💡 **Resumo:** Nesta peça foi adotado o blank otimizado de **{r['n_tiras']} tiras x {r['n_pecas_por_tira']} peças**, "
-            f"totalizando **{r['total_pecas']} peças** por chapa. "
-            f"Cada peça pesa **{r['peso_peca_kg']:.3f} kg** e gera **{r['retalho_por_peca_kg']:.3f} kg** de retalho."
-        )
-
-        with st.expander("Ver dados brutos (JSON)"):
-            st.json(r)
+    if st.button("💾 Salvar parâmetros", type="primary", key="par_salvar"):
+        try:
+            d.salvar_parametros(novas)
+            st.session_state["_msg"] = "Parâmetros salvos"
+            salvo = True
+        except PermissionError:
+            st.error("Não consegui salvar: feche o parametros.xlsx no Excel e tente de novo.")
+            salvo = False
+        if salvo:
+            st.rerun()
