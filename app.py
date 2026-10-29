@@ -135,6 +135,9 @@ with tab_abs:
             p = params_abs()
             try:
                 item, _ = calc.calcular_abs(par, **p)
+                rec, _ = calc.recomendar_chapa(par, p["comprimento"], p["largura"], p["espessura"],
+                                               p["cor"], p["polimero_label"], p["conceito"])
+                item["Código Chapa"] = rec.iloc[0]["Código"] if not rec.empty else ""
                 salvar("Orçamentos", p["cod_item"], {"Orçamentos": [item]},
                        f"Orçamento **{p['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
             except Exception as e:
