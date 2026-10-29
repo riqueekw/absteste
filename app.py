@@ -460,7 +460,7 @@ with tab_hist:
 # =============================== PARÂMETROS ==================================
 with tab_par:
     st.caption("Preços, taxas e constantes usados em todos os cálculos. Ficam em parametros.xlsx.")
-    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes"])
+    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes", "Chapas ABS"])
     novas = {}
     with sub[0]:
         novas["Centros de custo"] = st.data_editor(par.centros, num_rows="dynamic", hide_index=True, key="par_cc")
