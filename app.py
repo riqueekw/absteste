@@ -478,6 +478,11 @@ with tab_par:
         novas["Constantes"] = st.data_editor(
             const, hide_index=True, key="par_const", disabled=["Parâmetro", "Obs."], num_rows="fixed",
             column_config={"Valor": st.column_config.NumberColumn("Valor", format="%g")})
+    with sub[5]:
+        st.caption("Polímero em branco = a chapa serve para qualquer polímero (ex.: ABS/PC).")
+        novas["Chapas"] = st.data_editor(
+            par.chapas, num_rows="dynamic", hide_index=True, key="par_chapas",
+            column_config={"Polímero": st.column_config.SelectboxColumn("Polímero", options=list(calc.POLIMEROS))})
 
     if st.button("💾 Salvar parâmetros", type="primary", key="par_salvar"):
         try:
