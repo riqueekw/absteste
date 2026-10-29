@@ -101,6 +101,69 @@ CONSTANTES = [
     (calc.K_MONT_CC, 369, "Código do centro de custo da montagem"),
 ]
 
+CHAPAS = [  # (código, comprimento mm, largura mm, espessura mm, polímero, cor, descrição)
+    ('105751000', 2700, 1700, 4, 'ABS-s', 'EVO2', 'ABS C/ TEXTURA EVO II'),
+    ('105753000', 2700, 1700, 4, 'ABS-s', 'EVO4', 'ABS C/ TEXTURA EVO IV'),
+    ('105310000', 2400, 1600, 4, 'ABS-s', 'EVO2', 'ABES C/ TEXTURA EVO II'),
+    ('105624000', 1200, 1600, 4, 'ABS-s', 'EVO1', 'ABS C/ TEXTURA EVO I'),
+    ('105397000', 1600, 1200, 5.75, 'ABS-s', 'PRETO', 'ABS LISO PRETO'),
+    ('105395000', 1600, 1200, 4, 'ABS-s', 'PRETO', 'ABS LISO PRETO'),
+    ('106271000', 1600, 1200, 4, 'ABS-s', 'ECO2', 'ABS TEXT ECO II'),
+    ('106235000', 1500, 2100, 6.5, 'ABS-s', 'ECO3', 'ABS TEXT ECO III'),
+    ('106290000', 1200, 1600, 4, 'ABS-s', 'ECO1', 'ABS TEXT ECO I'),
+    ('105905000', 1200, 1400, 4.5, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRÍLICA MONDGLASS BRANCO'),
+    ('105909000', 800, 850, 4, 'ABS-s', 'PRETO', 'ABS LISO PRETO'),
+    ('105308000', 1600, 1200, 4, 'ABS-s', 'EVO2', 'ABS C/ TEXTURA EVO II'),
+    ('105307000', 1600, 1200, 4, 'ABS-s', 'EVO4', 'ABS C/ TEXTURA EVO1V'),
+    ('105904000', 1600, 1200, 4.5, 'ABS-PMMA', 'BRANCO', 'CHAPA ABS ACRILICO BRANCO'),
+    ('107439000', 2100, 1100, 6, 'ABS-s', 'EVO4', 'CHAPA ABS C/ TEXTURA EVO IV'),
+    ('105556000', 2700, 1400, 5.75, 'ABS-s', 'EVO1', 'CHAPA ABS C/ TEXTURA EVO I'),
+    ('106297000', 2200, 1050, 4, 'ABS-s', 'EVO2', 'CHAPA ABS C/ TEXTURA EVO II'),
+    ('106292000', 2700, 1700, 4, 'ABS-s', 'PRETO', 'CHAPA ABS LISO PRETO'),
+    ('105398000', 2270, 1600, 5.75, 'ABS-s', 'PRETO', 'CHAPA ABS LISO PRETO'),
+    ('106419000', 3610, 1930, 6, 'ABS-s', 'PRETO', 'CHAPA ABS LISO PRETO'),
+    ('105782000', 2700, 1400, 5.75, 'ABS-s', 'EVO1', 'CHAPA ABS TEXT. EVO I'),
+    ('106278000', 2700, 1700, 4, 'ABS-s', 'ECO1', 'CHAPA ABS TEXT. ECO 1'),
+    ('106279000', 2700, 1700, 5.75, 'ABS-s', 'ECO1', 'CHAPA ABS TEXT. ECO 1'),
+    ('106291000', 2700, 1700, 6, 'ABS-s', 'ECO1', 'CHAPA ABS TEXT. ECO 1'),
+    ('106280000', 2700, 1700, 4, 'ABS-s', 'ECO2', 'CHAPA ABS TEXT. ECO 2'),
+    ('106281000', 2700, 1700, 5.75, 'ABS-s', 'ECO2', 'CHAPA ABS TEXT. ECO 2'),
+    ('106299000', 1600, 1200, 6.5, 'ABS-s', 'ECO3', 'CHAPA ABS TEXT. ECO 3'),
+    ('106294000', 1600, 1200, 4, 'ABS-s', 'ECO3', 'CHAPA ABS TEXT. ECO 3'),
+    ('106283000', 2700, 1700, 5.75, 'ABS-s', 'ECO3', 'CHAPA ABS TEXT. ECO 3'),
+    ('106282000', 2700, 1700, 4, 'ABS-s', 'ECO3', 'CHAPA ABS TEXT. ECO 3'),
+    ('106285000', 2700, 1700, 5.75, 'ABS-s', 'EVO1', 'CHAPA ABS TEXT. EVO I'),
+    ('106284000', 2700, 1700, 4, 'ABS-s', 'EVO1', 'CHAPA ABS TEXT. EVO I'),
+    ('106302000', 2850, 1950, 5.75, 'ABS-s', 'EVO1', 'CHAPA ABS TEXT. EVO 1'),
+    ('106287000', 2700, 1700, 5.75, 'ABS-s', 'EVO2', 'CHAPA ABS TEXT. EVO II'),
+    ('106289000', 2700, 1700, 5.75, 'ABS-s', 'EVO4', 'CHAPA ABS TEXT. EVO IV'),
+    ('106483000', 1500, 1300, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106288000', 2700, 1700, 4, 'ABS-s', 'EVO4', 'CHAPA ABS TEXT. EVO IV'),
+    ('105942000', 2050, 1460, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('105941000', 2700, 1700, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('105986000', 850, 600, 4.5, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106451000', 1320, 1060, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106452000', 1700, 1700, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106453000', 2000, 1500, 6, 'ABS-PMMA', 'PRETO GLITTER', 'CHAPA ACRILICA MONDGLASS PRETO GLITTER'),
+    ('106484000', 1400, 1000, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106485000', 1500, 1220, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106486000', 1500, 1300, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('106487000', 1300, 950, 6, 'ABS-PMMA', 'BRANCO', 'CHAPA ACRILICA MONDGLASS BRANCO'),
+    ('190300000', 1600, 2700, 5, 'ABS-TPE', 'ECO1', 'CHAPA ABS-TPE ECO1 SENOPLAST'),
+    ('190301000', 1600, 2700, 4, 'ABS-TPE', 'ECO2', 'CHAPA ABS-TPE ECO2 SENOPLAST'),
+    ('190302000', 1600, 2700, 4, 'ABS-TPE', 'RHINO', 'CHAPA ABS-TPE RHINO SENOPLAST'),
+    ('190303000', 1600, 2700, 6, 'ABS-PMMA', 'BRANCO GEADA', 'CHAPA ABS/PC BRANCO GEADA SENOPLAST'),
+    ('190304000', 1600, 2700, 4, 'ABS-PMMA', 'BLACK PIANO', 'CHAPA ABS/PC BLACK PIANO SENOPLAST'),
+    ('190305000', 1600, 2700, 4, 'ABS-TPE', 'ECO3', 'CHAPA ABS-TPE ECO3 SENOPLAST'),
+    ('110355000', 1600, 2700, 6, 'ABS-TPE', 'ECO1', 'CHAPA ABS-TPE ECO 1 SENOPLAST'),
+    ('110356000', 1600, 2700, 4, 'ABS-TPE', 'ECO3', 'CHAPA ABS-TPE ECO 3 SENOPLAST'),
+    ('110357000', 1600, 2700, 4, 'ABS-PMMA', 'BLACK PIANO', 'CHAPA ABS/PC BLACK PIANO SENOPLAST'),
+    ('110358000', 1600, 2700, 4, 'ABS-TPE', 'ECO2', 'CHAPA ABS-TPE ECO 2 CORAL SENOPLAST'),
+    ('110359000', 1600, 2700, 6, 'ABS-PMMA', 'BRANCO GEADA', 'CHAPA ABS/PC BRANCO GEADA SENOPLAST'),
+    ('110501000', 1600, 2400, 4, 'ABS-PMMA', 'BLACK PIANO', 'CHAPA ABS/PC BLACK PIANO SENOPLAST'),
+    ('110360000', 2400, 1600, 6, 'ABS-PMMA', 'BRANCO GEADA', 'CHAPA ABS/PC BRANCO GEADA SENOPLAST'),
+    ('110361000', 2150, 1050, 6, 'ABS-PMMA', 'BRANCO GEADA', 'CHAPA ABS/PC BRANCO GEADA SENOPLAST'),
+]
 
 def _padrao():
     return {
@@ -109,6 +172,7 @@ def _padrao():
         "Tintas": pd.DataFrame(TINTAS, columns=["Tinta", "Código", "Preço (R$/L)"]),
         "Operações": pd.DataFrame(OPERACOES, columns=["Operação", "C.C.", "Grupo máquina"]),
         "Constantes": pd.DataFrame(CONSTANTES, columns=["Parâmetro", "Valor", "Obs."]),
+        "Chapas": pd.DataFrame(CHAPAS, columns=["Código", "Comprimento (mm)", "Largura (mm)", "Espessura (mm)", "Polímero", "Cor", "Descrição"]),
     }
 
 
@@ -122,6 +186,7 @@ class Parametros:
         self.materiais = tabelas["Materiais"]
         self.tintas = tabelas["Tintas"]
         self.operacoes = tabelas["Operações"]
+        self.chapas = tabelas["Chapas"]
         const = tabelas["Constantes"].dropna(subset=["Parâmetro", "Valor"])
         self.k = dict(zip(const["Parâmetro"], const["Valor"].astype(float)))
         cc = self.centros.dropna(subset=["Código", "R$/h"])
