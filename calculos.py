@@ -105,6 +105,49 @@ def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
     }
     return item, {nome: round(v, 2) for nome, v in custos.items()}
 
+def recomendar_chapa(par, comprimento, largura, espessura, cor, polimero_label, conceito):
+    """Melhor chapa cadastrada (aba Parâmetros > Chapas ABS) para o blank da peça.
+
+    Filtra por cor, polímero (célula em branco = serve para qualquer um) e espessura exata,
+    e só mantém as chapas onde o blank cabe. Critério: maior aproveitamento da chapa;
+    empate -> mais peças por chapa. Devolve (tabela ordenada, aviso); tabela vazia = sem chapa.
+    """
+    cto = 200 if conceito == "Mesa" else 100
+    comp, lng = (comprimento + cto) / 1000, (largura + cto) / 1000
+
+    ch = par.chapas.dropna(subset=["Código", "Comprimento (mm)", "Largura (mm)", "Espessura (mm)"])
+    ch = ch.drop_duplicates("Código")
+    ch = ch[ch["Cor"].astype(str).str.strip().str.upper() == str(cor).strip().upper()]
+    pol = ch["Polímero"]
+    ch = ch[pol.isna() | (pol.astype(str).str.strip() == "") | (pol == polimero_label)]
+    if ch.empty:
+        return pd.DataFrame(), f"Nenhuma chapa cadastrada para a cor {cor} com {polimero_label}."
+
+    f = lambda v: f"{v:g}".replace(".", ",")
+    disponiveis = ", ".join(f(e) for e in sorted(ch["Espessura (mm)"].unique()))
+    ch = ch[(ch["Espessura (mm)"] - espessura).abs() < 0.01]
+    if ch.empty:
+        return pd.DataFrame(), (f"Não há chapa de {f(espessura)} mm para {cor} ({polimero_label}). "
+                                f"Espessuras cadastradas: {disponiveis} mm.")
+
+    linhas = []
+    for _, x in ch.iterrows():
+        c, l = x["Comprimento (mm)"] / 1000, x["Largura (mm)"] / 1000
+        qtd = max(math.floor(c / comp) * math.floor(l / lng), math.floor(c / lng) * math.floor(l / comp))
+        if qtd > 0:
+            linhas.append({
+                "Código": x["Código"],
+                "Descrição": _txt(x["Descrição"]),
+                "Chapa (mm)": f'{x["Comprimento (mm)"]:.0f} x {x["Largura (mm)"]:.0f}',
+                "Espessura (mm)": x["Espessura (mm)"],
+                "Peças/chapa": qtd,
+                "Aproveitamento (%)": round(qtd * comp * lng / (c * l) * 100, 1),
+            })
+    if not linhas:
+        return pd.DataFrame(), (f"O blank ({comprimento + cto:.0f} x {largura + cto:.0f} mm) não cabe em "
+                                f"nenhuma chapa de {f(espessura)} mm para {cor}.")
+    df = pd.DataFrame(linhas).sort_values(["Aproveitamento (%)", "Peças/chapa"], ascending=False, kind="stable")
+    return df.reset_index(drop=True), ""
 
 # -----------------------------------------------------------------------------
 # INSERTOS (chapas, operações, terceiros)
