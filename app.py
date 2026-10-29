@@ -141,6 +141,22 @@ with tab_abs:
                 st.error(f"Erro no cálculo: {e}")
 
     with col_r:
+        st.markdown("**Chapa recomendada**")
+        rec, aviso = calc.recomendar_chapa(par, s["abs_comp"], s["abs_larg"], s["abs_esp"],
+                                           s["abs_cor"], s["abs_pol"], s["abs_conc"])
+        if rec.empty:
+            st.warning(aviso)
+        else:
+            melhor = rec.iloc[0]
+            st.code(melhor["Código"], language=None)
+            st.caption(f'{melhor["Descrição"]} · {melhor["Chapa (mm)"]} mm · {num(melhor["Espessura (mm)"])} mm de espessura')
+            n1, n2 = st.columns(2)
+            n1.metric("Peças por chapa", int(melhor["Peças/chapa"]))
+            n2.metric("Aproveitamento", num(melhor["Aproveitamento (%)"], 1) + "%")
+            if len(rec) > 1:
+                with st.expander("Outras opções"):
+                    st.dataframe(rec, hide_index=True)
+        st.divider()
         st.markdown("**Prévia do cálculo**")
         try:
             prev, custos = calc.calcular_abs(par, **params_abs())
