@@ -8,7 +8,7 @@ import streamlit as st
 import calculos as calc
 import dados as d
 
-st.set_page_config(page_title="ORÇAMENTOS", page_icon="▶️", layout="wide")
+st.set_page_config(page_title="Orçamentos", page_icon="🧮", layout="wide")
 
 st.markdown("""
 <style>
@@ -85,45 +85,12 @@ def cfg_num(rotulo, **kw):
 materiais = par.materiais["Descrição"].dropna().tolist()
 operacoes = par.operacoes["Operação"].dropna().tolist()
 tintas = par.tintas["Tinta"].dropna().tolist()
-cores = sorted(set(calc.CORES) | set(par.chapas["Cor"].dropna().astype(str)))
+centros = [int(float(x)) for x in par.centros["Código"].dropna()]
+nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
+           for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
+           if pd.notna(cod) and pd.notna(v)}
 
-
-# ------------------- CORREÇÃO: normalização dos Centros de Custo -------------
-centros_df = par.centros.copy()
-centros_df.columns = (
-    centros_df.columns.astype(str)
-    .str.strip()
-    .str.replace(" ", "", regex=False)
-    .str.replace("$", "R$", regex=False)
-)
-renomear = {
-    "Codigo": "Código", "Código": "Código",
-    "Descricao": "Descrição", "Descrição": "Descrição",
-    "R$/h": "R$/h", "R$/H": "R$/h", "R$h": "R$/h",
-}
-centros_df = centros_df.rename(columns=renomear)
-
-faltando = [c for c in ("Código", "Descrição", "R$/h") if c not in centros_df.columns]
-if faltando:
-    st.error(f"Faltam colunas em Centros de custo: {faltando}. "
-             f"Colunas encontradas: {centros_df.columns.tolist()}")
-    st.stop()
-
-centros_df = centros_df.dropna(subset=["Código", "R$/h"])
-centros = [int(float(x)) for x in centros_df["Código"].dropna()]
-
-nome_cc = {}
-for cod, desc, v in zip(centros_df["Código"], centros_df["Descrição"], centros_df["R$/h"]):
-    try:
-        cod_i = int(float(cod))
-        v_f = float(v)
-    except (TypeError, ValueError):
-        continue
-    desc_s = str(desc) if pd.notna(desc) else ""
-    nome_cc[cod_i] = f"{cod_i} · {desc_s} ({brl(v_f)}/h)"
-# -----------------------------------------------------------------------------
-
-st.markdown("## ▶️ ORÇAMENTOS")
+st.markdown("## 🧮 Orçamentos")
 tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_hist, tab_par = st.tabs(
     ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Histórico", "Parâmetros"])
 
@@ -153,7 +120,7 @@ with tab_abs:
         with st.container(border=True):
             st.markdown("**Material**")
             c4, c5, c6 = st.columns(3)
-            c4.selectbox("Cor", cores, key="abs_cor")
+            c4.selectbox("Cor", calc.CORES, key="abs_cor")
             c5.selectbox("Polímero", list(calc.POLIMEROS), key="abs_pol")
             c6.number_input("Peso líquido (kg)", min_value=0.001, max_value=1000.0, step=0.1,
                             format="%.3f", key="abs_peso")
@@ -167,36 +134,12 @@ with tab_abs:
             p = params_abs()
             try:
                 item, _ = calc.calcular_abs(par, **p)
-                
-                # CORREÇÃO: calcula a chapa recomendada e vincula ANTES de salvar
-                rec, _ = calc.recomendar_chapa(
-                    par, p["comprimento"], p["largura"], p["espessura"],
-                    p["cor"], p["polimero_label"], p["conceito"])
-                item["Código Chapa"] = rec.iloc[0]["Código"] if not rec.empty else ""
-                
                 salvar("Orçamentos", p["cod_item"], {"Orçamentos": [item]},
                        f"Orçamento **{p['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
             except Exception as e:
                 st.error(f"Erro no cálculo: {e}")
 
     with col_r:
-        st.markdown("**Chapa recomendada**")
-        rec, aviso = calc.recomendar_chapa(par, s["abs_comp"], s["abs_larg"], s["abs_esp"],
-                                           s["abs_cor"], s["abs_pol"], s["abs_conc"])
-        if rec.empty:
-            st.warning(aviso)
-        else:
-            melhor = rec.iloc[0]
-            st.code(melhor["Código"], language=None)
-            st.caption(f'{melhor["Descrição"]} · {melhor["Chapa (mm)"]} mm · {num(melhor["Espessura (mm)"])} mm de espessura')
-            n1, n2 = st.columns(2)
-            n1.metric("Peças por chapa", int(melhor["Peças/chapa"]))
-            n2.metric("Aproveitamento", num(melhor["Aproveitamento (%)"], 1) + "%")
-            if len(rec) > 1:
-                with st.expander("Outras opções"):
-                    st.dataframe(rec, hide_index=True)
-        st.divider()
-        
         st.markdown("**Prévia do cálculo**")
         try:
             prev, custos = calc.calcular_abs(par, **params_abs())
@@ -497,7 +440,7 @@ with tab_hist:
 # =============================== PARÂMETROS ==================================
 with tab_par:
     st.caption("Preços, taxas e constantes usados em todos os cálculos. Ficam em parametros.xlsx.")
-    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes", "Chapas ABS"])
+    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes"])
     novas = {}
     with sub[0]:
         novas["Centros de custo"] = st.data_editor(par.centros, num_rows="dynamic", hide_index=True, key="par_cc")
@@ -515,12 +458,7 @@ with tab_par:
         novas["Constantes"] = st.data_editor(
             const, hide_index=True, key="par_const", disabled=["Parâmetro", "Obs."], num_rows="fixed",
             column_config={"Valor": st.column_config.NumberColumn("Valor", format="%g")})
-    with sub[5]:
-        st.caption("Polímero em branco = a chapa serve para qualquer polímero (ex.: ABS/PC).")
-        novas["Chapas"] = st.data_editor(
-            par.chapas, num_rows="dynamic", hide_index=True, key="par_chapas",
-            column_config={"Polímero": st.column_config.SelectboxColumn("Polímero", options=list(calc.POLIMEROS))})
-    
+
     if st.button("💾 Salvar parâmetros", type="primary", key="par_salvar"):
         try:
             d.salvar_parametros(novas)
