@@ -86,10 +86,42 @@ materiais = par.materiais["Descrição"].dropna().tolist()
 operacoes = par.operacoes["Operação"].dropna().tolist()
 tintas = par.tintas["Tinta"].dropna().tolist()
 cores = sorted(set(calc.CORES) | set(par.chapas["Cor"].dropna().astype(str)))
-centros = [int(float(x)) for x in par.centros["Código"].dropna()]
-nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
-           for cod, desc, v in zip(...)
-           if pd.notna(cod) and pd.notna(v)}
+
+
+# ------------------- CORREÇÃO: normalização dos Centros de Custo -------------
+centros_df = par.centros.copy()
+centros_df.columns = (
+    centros_df.columns.astype(str)
+    .str.strip()
+    .str.replace(" ", "", regex=False)
+    .str.replace("$", "R$", regex=False)
+)
+renomear = {
+    "Codigo": "Código", "Código": "Código",
+    "Descricao": "Descrição", "Descrição": "Descrição",
+    "R$/h": "R$/h", "R$/H": "R$/h", "R$h": "R$/h",
+}
+centros_df = centros_df.rename(columns=renomear)
+
+faltando = [c for c in ("Código", "Descrição", "R$/h") if c not in centros_df.columns]
+if faltando:
+    st.error(f"Faltam colunas em Centros de custo: {faltando}. "
+             f"Colunas encontradas: {centros_df.columns.tolist()}")
+    st.stop()
+
+centros_df = centros_df.dropna(subset=["Código", "R$/h"])
+centros = [int(float(x)) for x in centros_df["Código"].dropna()]
+
+nome_cc = {}
+for cod, desc, v in zip(centros_df["Código"], centros_df["Descrição"], centros_df["R$/h"]):
+    try:
+        cod_i = int(float(cod))
+        v_f = float(v)
+    except (TypeError, ValueError):
+        continue
+    desc_s = str(desc) if pd.notna(desc) else ""
+    nome_cc[cod_i] = f"{cod_i} · {desc_s} ({brl(v_f)}/h)"
+# -----------------------------------------------------------------------------
 
 st.markdown("## ▶️ ORÇAMENTOS")
 tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_hist, tab_par = st.tabs(
@@ -135,18 +167,18 @@ with tab_abs:
             p = params_abs()
             try:
                 item, _ = calc.calcular_abs(par, **p)
+                
+                # CORREÇÃO: calcula a chapa recomendada e vincula ANTES de salvar
                 rec, _ = calc.recomendar_chapa(
                     par, p["comprimento"], p["largura"], p["espessura"],
                     p["cor"], p["polimero_label"], p["conceito"])
                 item["Código Chapa"] = rec.iloc[0]["Código"] if not rec.empty else ""
+                
                 salvar("Orçamentos", p["cod_item"], {"Orçamentos": [item]},
                        f"Orçamento **{p['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
             except Exception as e:
                 st.error(f"Erro no cálculo: {e}")
-               
-                rec, _ = calc.recomendar_chapa(par, p["comprimento"], p["largura"], p["espessura"], p["cor"], p["polimero_label"], p["conceito"])
-                item["Código Chapa"] = rec.iloc[0]["Código"] if not rec.empty else ""
-    
+
     with col_r:
         st.markdown("**Chapa recomendada**")
         rec, aviso = calc.recomendar_chapa(par, s["abs_comp"], s["abs_larg"], s["abs_esp"],
@@ -499,4 +531,3 @@ with tab_par:
             salvo = False
         if salvo:
             st.rerun()
-            
