@@ -8,7 +8,7 @@ import streamlit as st
 import calculos as calc
 import dados as d
 
-st.set_page_config(page_title="Orçamentos", page_icon="▶️", layout="wide")
+st.set_page_config(page_title="ORÇAMENTOS", page_icon="▶️", layout="wide")
 
 st.markdown("""
 <style>
@@ -90,7 +90,7 @@ nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
            for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
            if pd.notna(cod) and pd.notna(v)}
 
-st.markdown("## 🧮 Orçamentos")
+st.markdown("## ▶️ ORÇAMENTOS")
 tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_hist, tab_par = st.tabs(
     ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Histórico", "Parâmetros"])
 
