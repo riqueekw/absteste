@@ -88,7 +88,7 @@ tintas = par.tintas["Tinta"].dropna().tolist()
 cores = sorted(set(calc.CORES) | set(par.chapas["Cor"].dropna().astype(str)))
 centros = [int(float(x)) for x in par.centros["Código"].dropna()]
 nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
-           for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
+           for cod, desc, v in zip(...)
            if pd.notna(cod) and pd.notna(v)}
 
 st.markdown("## ▶️ ORÇAMENTOS")
@@ -135,6 +135,10 @@ with tab_abs:
             p = params_abs()
             try:
                 item, _ = calc.calcular_abs(par, **p)
+                rec, _ = calc.recomendar_chapa(
+                    par, p["comprimento"], p["largura"], p["espessura"],
+                    p["cor"], p["polimero_label"], p["conceito"])
+                item["Código Chapa"] = rec.iloc[0]["Código"] if not rec.empty else ""
                 salvar("Orçamentos", p["cod_item"], {"Orçamentos": [item]},
                        f"Orçamento **{p['cod_item']}** salvo: {brl(item['Custo Total (R$)'])}")
             except Exception as e:
