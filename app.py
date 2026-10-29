@@ -8,7 +8,7 @@ import streamlit as st
 import calculos as calc
 import dados as d
 
-st.set_page_config(page_title="Orçamentos", page_icon="🧮", layout="wide")
+st.set_page_config(page_title="Orçamentos", page_icon="▶️", layout="wide")
 
 st.markdown("""
 <style>
