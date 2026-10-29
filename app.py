@@ -85,6 +85,7 @@ def cfg_num(rotulo, **kw):
 materiais = par.materiais["Descrição"].dropna().tolist()
 operacoes = par.operacoes["Operação"].dropna().tolist()
 tintas = par.tintas["Tinta"].dropna().tolist()
+cores = sorted(set(calc.CORES) | set(par.chapas["Cor"].dropna().astype(str)))
 centros = [int(float(x)) for x in par.centros["Código"].dropna()]
 nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
            for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
