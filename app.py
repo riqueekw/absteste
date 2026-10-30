@@ -453,9 +453,8 @@ with tab_aprov:
                     k1, k2 = st.columns(2)
                     k1.metric("Total de peças", m["Peças por chapa"])
                     k2.metric("Aproveitamento", num(m["Aproveitamento (%)"], 1) + "%")
-                    k3, k4 = st.columns(2)
-                    k3.metric("Consumo por peça", num(m["Consumo por peça (kg)"], 3) + " kg")
-                    k4.metric("Retalho por peça", num(m["Retalho por peça (kg)"], 3) + " kg")
+                    st.metric("Consumo por peça (kg)", num(m["Consumo por peça (kg)"], 4))
+                    st.metric("Retalho por peça (kg)", num(m["Retalho por peça (kg)"], 4))
                     st.caption(f'{m["Tiras por chapa"]} tiras por chapa × {m["Peças por tira"]} peças por tira')
 
             if melhor:
