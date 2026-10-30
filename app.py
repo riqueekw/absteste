@@ -420,12 +420,12 @@ with tab_aprov:
             a1, a2, a3 = st.columns(3)
             a1.number_input("Espessura (mm)", min_value=0.0, step=0.1, key="ap_esp")
             a2.number_input("Largura (mm)", min_value=0.0, step=10.0, key="ap_cl")
-            a3.number_input("Comprimento (mm)", min_value=0.0, step=10.0, key="ap_cc")
+            a3.number_input("Comp. (mm)", min_value=0.0, step=10.0, key="ap_cc")
         with st.container(border=True):
             st.markdown("**Blank a ser cortado**")
             b1, b2, b3 = st.columns(3)
             b1.number_input("Largura (mm)", min_value=0.0, step=1.0, key="ap_pl")
-            b2.number_input("Comprimento (mm)", min_value=0.0, step=1.0, key="ap_pc")
+            b2.number_input("Comp. (mm)", min_value=0.0, step=1.0, key="ap_pc")
             b3.number_input("Peças por blank", min_value=1, step=1, key="ap_qt",
                             help="Ex.: 2 quando saem as peças D/E do mesmo blank")
         st.button("Limpar", key="ap_limpar", on_click=resetar, args=(PAD,))
