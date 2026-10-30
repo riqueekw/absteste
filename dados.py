@@ -193,6 +193,7 @@ class Parametros:
         self.tintas = tabelas["Tintas"]
         self.operacoes = tabelas["Operações"]
         self.chapas = tabelas["Chapas"]
+        self.densidades = tabelas["Densidades"]
         const = tabelas["Constantes"].dropna(subset=["Parâmetro", "Valor"])
         self.k = dict(zip(const["Parâmetro"], const["Valor"].astype(float)))
         cc = self.centros.dropna(subset=["Código", "R$/h"])
@@ -204,6 +205,12 @@ class Parametros:
             return self._cc[int(float(cc))]
         except (KeyError, ValueError, TypeError):
             raise ValueError(f"Centro de custo '{cc}' não encontrado na aba Parâmetros.") from None
+
+    def densidade(self, material):
+        linha = self.densidades[self.densidades["Material"] == material]
+        if linha.empty:
+            raise ValueError(f"Material '{material}' não encontrado na aba Parâmetros.")
+        return float(linha["Densidade (g/cm³)"].iloc[0])
 
     def preco_tinta(self, tinta):
         linha = self.tintas[self.tintas["Tinta"] == tinta]
