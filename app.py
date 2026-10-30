@@ -92,8 +92,8 @@ nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
            if pd.notna(cod) and pd.notna(v)}
 
 st.markdown("## 🔎 Orçamentos")
-tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_hist, tab_par = st.tabs(
-    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Histórico", "Parâmetros"])
+tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_hist, tab_par = st.tabs(
+    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Histórico", "Parâmetros"])
 
 # =============================== ABS =========================================
 with tab_abs:
@@ -401,6 +401,72 @@ with tab_peso:
         m1, m2 = st.columns(2)
         m1.metric("Peso da peça", num(peso, 3) + " kg")
         m2.metric("Peso + 30%", num(peso30, 3) + " kg")
+
+# ============================ APROVEITAMENTO =================================
+with tab_aprov:
+    mat_chapa = par.densidades["Material"].dropna().tolist()
+    PAD = {"ap_mat": mat_chapa[0], "ap_esp": 1.5, "ap_cl": 1000.0, "ap_cc": 2810.0,
+           "ap_pl": 453.0, "ap_pc": 496.0, "ap_qt": 1}
+    iniciar(PAD)
+    s = st.session_state
+    if s["ap_mat"] not in mat_chapa:
+        s["ap_mat"] = mat_chapa[0]
+    col_f, col_r = st.columns([1, 1.7], gap="large")
+
+    with col_f:
+        with st.container(border=True):
+            st.markdown("**Chapa**")
+            st.selectbox("Material", mat_chapa, key="ap_mat")
+            a1, a2, a3 = st.columns(3)
+            a1.number_input("Espessura (mm)", min_value=0.0, step=0.1, key="ap_esp")
+            a2.number_input("Largura (mm)", min_value=0.0, step=10.0, key="ap_cl")
+            a3.number_input("Comprimento (mm)", min_value=0.0, step=10.0, key="ap_cc")
+        with st.container(border=True):
+            st.markdown("**Blank a ser cortado**")
+            b1, b2, b3 = st.columns(3)
+            b1.number_input("Largura (mm)", min_value=0.0, step=1.0, key="ap_pl")
+            b2.number_input("Comprimento (mm)", min_value=0.0, step=1.0, key="ap_pc")
+            b3.number_input("Peças por blank", min_value=1, step=1, key="ap_qt",
+                            help="Ex.: 2 quando saem as peças D/E do mesmo blank")
+        st.button("Limpar", key="ap_limpar", on_click=resetar, args=(PAD,))
+
+    with col_r:
+        try:
+            tot, modelos, melhor = calc.calcular_aproveitamento(
+                par, s["ap_mat"], s["ap_esp"], s["ap_cl"], s["ap_cc"], s["ap_pl"], s["ap_pc"], s["ap_qt"])
+        except Exception as e:
+            modelos = None
+            st.warning(str(e))
+        if modelos:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Peso da chapa", num(tot["Peso chapa (kg)"], 3) + " kg")
+            m2.metric("Peso da peça", num(tot["Peso peça (kg)"], 3) + " kg")
+            m3.metric("Melhor modelo", melhor or "Não cabe")
+
+            for col, (nome, m) in zip(st.columns(2), modelos.items()):
+                with col.container(border=True):
+                    st.markdown(f"**{nome}**" + ("  ·  ✅ **É ESSE**" if nome == melhor else ""))
+                    st.caption(f'Blank {num(m["Largura (mm)"], 0)} × {num(m["Comprimento (mm)"], 0)} mm (largura × comprimento)')
+                    if m["Peças por chapa"] == 0:
+                        st.error("Não cabe na chapa.")
+                        continue
+                    k1, k2 = st.columns(2)
+                    k1.metric("Total de peças", m["Peças por chapa"])
+                    k2.metric("Aproveitamento", num(m["Aproveitamento (%)"], 1) + "%")
+                    k3, k4 = st.columns(2)
+                    k3.metric("Consumo por peça", num(m["Consumo por peça (kg)"], 3) + " kg")
+                    k4.metric("Retalho por peça", num(m["Retalho por peça (kg)"], 3) + " kg")
+                    st.caption(f'{m["Tiras por chapa"]} tiras por chapa × {m["Peças por tira"]} peças por tira')
+
+            if melhor:
+                m = modelos[melhor]
+                resumo = (
+                    f'Chapa {s["ap_mat"]} {num(s["ap_esp"])} x {num(s["ap_cl"], 0)} x {num(s["ap_cc"], 0)} mm '
+                    f'({num(tot["Peso chapa (kg)"], 3)} kg). Blank {num(m["Largura (mm)"], 0)} x {num(m["Comprimento (mm)"], 0)} mm, '
+                    f'{s["ap_qt"]} peça(s) por blank. {m["Tiras por chapa"]} tiras x {m["Peças por tira"]} peças por tira '
+                    f'= {m["Peças por chapa"]} peças por chapa. Peso da peça {num(tot["Peso peça (kg)"], 3)} kg; '
+                    f'retalho {num(m["Retalho por peça (kg)"], 3)} kg por peça; aproveitamento {num(m["Aproveitamento (%)"], 1)}%.')
+                st.text_area("Resumo para as observações do orçamento", resumo, height=120)
 
 # =============================== HISTÓRICO ===================================
 with tab_hist:
