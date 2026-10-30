@@ -101,6 +101,11 @@ CONSTANTES = [
     (calc.K_MONT_CC, 369, "Código do centro de custo da montagem"),
 ]
 
+DENSIDADES = [  # (material, g/cm³)
+    ("Aço Carbono", 7.85), ("Aço Inox", 7.85), ("Alumínio", 2.7), ("Borracha Nat", 0.92),
+    ("Bronze", 8.83), ("Cobre", 8.93), ("Latão", 8.5), ("Níquel", 8.91), ("Titânio", 4.55),
+]
+
 CHAPAS = [  # (código, comprimento mm, largura mm, espessura mm, polímero, cor, descrição)
     ('105751000', 2700, 1700, 4, 'ABS-s', 'EVO2', 'ABS C/ TEXTURA EVO II'),
     ('105753000', 2700, 1700, 4, 'ABS-s', 'EVO4', 'ABS C/ TEXTURA EVO IV'),
