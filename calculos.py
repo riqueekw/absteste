@@ -280,3 +280,44 @@ def calcular_peso(espessura, largura, comprimento, tipo):
     """mm x mm x mm x g/cm³ / 1.000.000 = kg. Devolve (peso, peso +30%)."""
     peso = espessura * largura * comprimento * DENSIDADES_PESO[tipo] / 1_000_000
     return peso, peso * 1.3
+
+# -----------------------------------------------------------------------------
+# APROVEITAMENTO DE CHAPA (guilhotina)
+# -----------------------------------------------------------------------------
+
+def calcular_aproveitamento(par, material, espessura, chapa_larg, chapa_comp, peca_larg, peca_comp, qt_blank):
+    """Chapa cortada em guilhotina: 1º corta tiras, 2º corta os blanks da tira.
+
+    Modelo 1 = blank como digitado; Modelo 2 = blank girado 90°.
+    Devolve (pesos, resultado de cada modelo, nome do melhor modelo ou None).
+    """
+    if min(espessura, chapa_larg, chapa_comp, peca_larg, peca_comp) <= 0:
+        raise ValueError("Preencha a espessura e todas as medidas.")
+    qt_blank = max(int(qt_blank), 1)
+    dens = par.densidade(material)
+
+    def kg(larg, comp):
+        return espessura * larg * comp * dens / 1_000_000
+
+    peso_chapa = kg(chapa_larg, chapa_comp)
+    peso_peca = kg(peca_larg, peca_comp) / qt_blank
+
+    modelos = {}
+    for nome, (lg, cp) in {"Modelo 1": (peca_larg, peca_comp), "Modelo 2": (peca_comp, peca_larg)}.items():
+        tiras, por_tira = math.floor(chapa_larg / lg), math.floor(chapa_comp / cp)
+        blanks = tiras * por_tira
+        pecas = blanks * qt_blank
+        modelos[nome] = {
+            "Largura (mm)": lg,
+            "Comprimento (mm)": cp,
+            "Tiras por chapa": tiras,
+            "Peças por tira": por_tira,
+            "Peças por chapa": pecas,
+            "Consumo por peça (kg)": peso_chapa / pecas if pecas else None,
+            "Retalho por peça (kg)": peso_chapa / pecas - peso_peca if pecas else None,
+            "Aproveitamento (%)": blanks * lg * cp / (chapa_larg * chapa_comp) * 100,
+        }
+    melhor = max(modelos, key=lambda n: (modelos[n]["Peças por chapa"], n == "Modelo 1"))
+    if modelos[melhor]["Peças por chapa"] == 0:
+        melhor = None
+    return {"Peso chapa (kg)": peso_chapa, "Peso peça (kg)": peso_peca}, modelos, melhor
