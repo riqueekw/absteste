@@ -177,6 +177,7 @@ def _padrao():
         "Tintas": pd.DataFrame(TINTAS, columns=["Tinta", "Código", "Preço (R$/L)"]),
         "Operações": pd.DataFrame(OPERACOES, columns=["Operação", "C.C.", "Grupo máquina"]),
         "Constantes": pd.DataFrame(CONSTANTES, columns=["Parâmetro", "Valor", "Obs."]),
+        "Densidades": pd.DataFrame(DENSIDADES, columns=["Material", "Densidade (g/cm³)"]),
         "Chapas": pd.DataFrame(CHAPAS, columns=["Código", "Comprimento (mm)", "Largura (mm)", "Espessura (mm)", "Polímero", "Cor", "Descrição"]),
     }
 
