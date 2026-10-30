@@ -526,7 +526,7 @@ with tab_hist:
 # =============================== PARÂMETROS ==================================
 with tab_par:
     st.caption("Preços, taxas e constantes usados em todos os cálculos. Ficam em parametros.xlsx.")
-    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes", "Chapas ABS"])
+    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes", "Chapas ABS", "Densidades"])
     novas = {}
     with sub[0]:
         novas["Centros de custo"] = st.data_editor(par.centros, num_rows="dynamic", hide_index=True, key="par_cc")
@@ -549,6 +549,9 @@ with tab_par:
         novas["Chapas"] = st.data_editor(
             par.chapas, num_rows="dynamic", hide_index=True, key="par_chapas",
             column_config={"Polímero": st.column_config.SelectboxColumn("Polímero", options=list(calc.POLIMEROS))})
+    with sub[6]:
+        st.caption("Densidade em g/cm³ (usada na aba Aproveitamento).")
+        novas["Densidades"] = st.data_editor(par.densidades, num_rows="dynamic", hide_index=True, key="par_dens")
 
     if st.button("💾 Salvar parâmetros", type="primary", key="par_salvar"):
         try:
