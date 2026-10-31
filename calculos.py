@@ -7,6 +7,8 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pandas as pd
 
+VERSAO = "2026-10-31.2"  # os 4 arquivos .py precisam estar na mesma versão
+
 # Nomes das constantes na tabela "Constantes" do parametros.xlsx
 K_LOTE = "Lote econômico (pç)"
 K_ABS_CICLO = "ABS: ciclo de termoformagem (min/chapa)"

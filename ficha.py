@@ -14,6 +14,8 @@ from openpyxl import load_workbook
 
 import calculos as calc
 
+VERSAO = "2026-10-31.2"  # os 4 arquivos .py precisam estar na mesma versão
+
 MODELO = Path(__file__).parent / "modelo_ficha.xlsx"
 
 # Grupos de máquina das operações do ABS (iguais aos da ficha preenchida)

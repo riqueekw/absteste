@@ -9,6 +9,8 @@ import pandas as pd
 
 import calculos as calc
 
+VERSAO = "2026-10-31.2"  # os 4 arquivos .py precisam estar na mesma versão
+
 PASTA = Path(__file__).parent
 ARQ_ORC = PASTA / "orcamentos.xlsx"
 ARQ_PAR = PASTA / "parametros.xlsx"

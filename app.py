@@ -2,6 +2,7 @@
 # ORÇAMENTOS  |  rodar com:  streamlit run app.py
 # app.py = telas | calculos.py = regras | dados.py = Excel (parâmetros e orçamentos)
 # =============================================================================
+import importlib
 import re
 
 import pandas as pd
@@ -11,7 +12,21 @@ import calculos as calc
 import dados as d
 import ficha as fi
 
+VERSAO = "2026-10-31.2"
+
+# recarrega os módulos a cada execução (evita ficar com versão antiga na memória)
+for _mod in (calc, d, fi):
+    importlib.reload(_mod)
+
 st.set_page_config(page_title="Orçamentos", page_icon="🧮", layout="wide")
+
+_versoes = {"app.py": VERSAO, "calculos.py": getattr(calc, "VERSAO", "antiga"),
+            "dados.py": getattr(d, "VERSAO", "antiga"), "ficha.py": getattr(fi, "VERSAO", "antiga")}
+if len(set(_versoes.values())) > 1:
+    st.error("Os arquivos do programa estão em versões diferentes. Substitua os desatualizados pelos da última versão "
+             "(todos na mesma pasta) e reinicie o app.")
+    st.table(pd.DataFrame({"Arquivo": list(_versoes), "Versão": list(_versoes.values())}).set_index("Arquivo"))
+    st.stop()
 
 st.markdown("""
 <style>
