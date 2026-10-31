@@ -9,7 +9,7 @@ import pandas as pd
 
 import calculos as calc
 
-VERSAO = "2026-10-31.2"  # os 4 arquivos .py precisam estar na mesma versão
+VERSAO = "2026-10-31.3"  # os 4 arquivos .py precisam estar na mesma versão
 
 PASTA = Path(__file__).parent
 ARQ_ORC = PASTA / "orcamentos.xlsx"
@@ -155,8 +155,10 @@ DENSIDADES = [  # (material, g/cm³)
     ("Bronze", 8.83), ("Cobre", 8.93), ("Latão", 8.5), ("Níquel", 8.91), ("Titânio", 4.55),
 ]
 
-GRUPOS = [  # (código do grupo de máquina, descrição)
+GRUPOS = [  # (código do grupo de máquina, descrição) - todas as máquinas de cada grupo
     ('300-001', 'ACABAMENTO - ESTILETE'),
+    ('300-001', 'ACABAMENTO - EMBALAR'),
+    ('300-001', 'ACABAMENTO - DIVERSOS'),
     ('301-001', 'BANCADA 13 - GUILHOTINA'),
     ('301-002', 'GUILHOTINA MECANICA NEWTON'),
     ('301-003', 'GUILHOTINA MECANICA'),
@@ -164,7 +166,9 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('301-005', 'GUILHOTINA NEWTON GHNL'),
     ('301-006', 'GUILHOTINA NEWTON GMN 2005'),
     ('301A', 'MAQ. SOLDA OXIACETILENO'),
+    ('301A', 'BANCADA - PONTEADEIRA'),
     ('302-001', 'PRENSA EXC. JUNDIAÍ 40 T (A)'),
+    ('302-001', 'PRENSA EXC. MSL 40 T (A)'),
     ('302-002', 'PRENSA EXC. GUTMANN 130 T (A)'),
     ('302-004', 'PRENSA EXC. HARLO 130 T (A)'),
     ('302-005', 'PRENSA EXC. VITOR 60 T (A)'),
@@ -178,12 +182,15 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('304-001', 'GAB. P/ SOLDAR P. LAMA'),
     ('304-003', 'CALANDRA'),
     ('304-006', 'PRENSA EXCENTRICA NR - 80 TON'),
+    ('304-006', 'GAB. P/ FURAR OBLONGO P. LAMA DIR.'),
     ('304-009', 'GAB. MONT. PORTA DIR. E ESQ.'),
     ('304-010', 'MAQUINA DE SOLDA'),
     ('304-011', 'GABARITO DE FURAÇÃO'),
     ('304-012', 'GABARITO DE MONTAGEM'),
     ('304-013', 'MAQ. SOLDA CEBORA'),
     ('304-014', 'MAQUINA SOLDA PONTO PNEUMATICA'),
+    ('304-014', 'MAQUINA SOLDA PONTO PNEUMATICA VERTICAL'),
+    ('304-014', 'PONTEADEIRA FIXA'),
     ('304-015', 'GABARITO DE MONTAR E SOLDAR ESTRIBO'),
     ('304-016', 'GABARITO DE MONTAR GRADE AGL'),
     ('304-017', 'GAB. FECHAMENTO PORTA DIREITA'),
@@ -215,6 +222,9 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('304-046', 'PONTEADEIRA COVER'),
     ('304-048', 'BANCADA - PONTEADEIRA'),
     ('305-008', 'EQUIPAMENTO SOLDA MIG'),
+    ('305-008', 'EQUIPAMENTO MIG'),
+    ('305-008', 'EQUIPAMENTO SAG TRR'),
+    ('305-008', 'MAQUINA SOLDA MIG'),
     ('305-009', 'MAQUINA DE SOLDA'),
     ('305-010', 'TRANSFORMADOR SOLDA ESAB'),
     ('305-012', 'MAQUINA DE SOLDA BALAO DE AR'),
@@ -249,6 +259,8 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('306-003', 'SERRA FITA'),
     ('306-004', 'CALANDRA'),
     ('306-005', 'BANCADA 08 - TESOURA ELETRICA'),
+    ('306-005', 'BANCADA 09 - TESOURA ELETRICA'),
+    ('306-005', 'BANCADA 10 - TESOURA ELETRICA'),
     ('307-002', 'ESTAGIO 1 AGL'),
     ('307-003', 'ESTAGIO 2 AGL'),
     ('307-004', 'ESTAGIO 3 AGL'),
@@ -284,6 +296,10 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('307-038', 'GAB. MONT. GRADE CAPO'),
     ('307-039', 'GAB. MONT. HASTE CAPO'),
     ('307-040', 'MESA MONTAGEM 1'),
+    ('307-040', 'MESA MONTAGEM 2'),
+    ('307-040', 'MESA MONTAGEM 3'),
+    ('307-040', 'MESA MONTAGEM 4'),
+    ('307-040', 'MESA MONTAGEM 5'),
     ('307-041', 'MESA MONTAGEM 6'),
     ('307-042', 'MESA 11 - CAPO'),
     ('307-043', 'GAB. MONTAGEM ASSOALHO 608/708'),
@@ -311,16 +327,25 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('307-078', 'GABARITO DE MONTAGEM HPN - DIR.'),
     ('307-079', 'GABARITO DE MONTAGEM HPN - ESQ.'),
     ('307-080', 'BANCADA - AJUSTE CHAPA CAPO HPN'),
+    ('307-080', 'MESA - CAPO HPN'),
+    ('307-080', 'MESA21 - CAPO HPN'),
     ('307-081', 'ÁREA MONTAGEM PARA-LAMA HPN'),
     ('307-082', 'GABARITO DE MONTAGEM CAPO 710'),
     ('307-083', 'GAB. DE MONT. CAPO FORD CARGO'),
     ('307-084', 'MESA MONTAGEM 28'),
+    ('307-084', 'MESA MONTAGEM 29'),
+    ('307-084', 'MESA MONTAGEM 30'),
+    ('307-084', 'MESA MONTAGEM 31'),
+    ('307-084', 'MESA MONTAGEM 32'),
+    ('307-084', 'MESA MONTAGEM 7'),
     ('307-085', 'MESA MONTAGEM 19'),
     ('307-086', 'MESA MONTAGEM 39'),
     ('309-001', 'CABINE DE DE PINTURA FINAL'),
     ('309-002', 'PREPARACAO DE TINTAS'),
     ('310-001', 'MÁQ. TERMO FORMAGEM (MAQUINA BALAO)'),
     ('310A', 'MÁQ. TERMO FORMAGEM (MAQUINA 1)'),
+    ('310A', 'MÁQ. TERMO FORMAGEM 2835A'),
+    ('310A', 'MÁQ. TERMO FORMAGEM 2835B'),
     ('310B', 'MÁQ. TERMO FORMAGEM (MAQUINA 2)'),
     ('316-001', 'BANCADA MONT.'),
     ('316-002', 'ROSQUEADEIRA'),
@@ -354,6 +379,9 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('332-014', 'MAQUINA REBARBAR TUBO'),
     ('332-015', "AGRAFADEIRA LATA D'AGUA"),
     ('332-016', 'MESA 14 - ESCAPAMENTO MONTADORAS'),
+    ('332-016', 'MESA 15 - ESCAPAMENTO MONTADORAS'),
+    ('332-016', 'MESA 8 - ESCAPAMENTO'),
+    ('332-016', 'MESA 9 - ESCAPAMENTO'),
     ('332-018', 'VIRTUAL ESCAPAMENTO'),
     ('332-019', 'TORNO ORBITAL'),
     ('332-022', 'MAQUINA DE ACALANAR'),
@@ -374,13 +402,31 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('338-003', 'CABINE DE ESMERILHAMENTO'),
     ('338-004', 'CABINE DE PREPARACAO DE PECAS'),
     ('338-005', 'AREA DE REFORMA E RETRABALHO (1)'),
+    ('338-005', 'AREA DE RETRABALHO E REFORMA (2)'),
+    ('338-005', 'AREA DE REFORMA E RETRABALHO (3)'),
     ('338-006', 'CABINE DE PINTURA PARACHOQUE MAN'),
     ('339-001', 'SERRA 1'),
+    ('339-001', 'SERRA 2'),
     ('339-006', 'ACABAMENTO AC2'),
     ('339-007', 'ACABAMENTO - FURACAO'),
     ('339-008', 'ACABAMENTO AC10'),
+    ('339-008', 'ACABAMENTO AC11'),
+    ('339-008', 'ACABAMENTO AC12'),
+    ('339-008', 'ACABAMENTO AC13'),
+    ('339-008', 'ACABAMENTO AC1'),
+    ('339-008', 'ACABAMENTO AC8'),
+    ('339-008', 'ACABAMENTO AC9'),
     ('339-013', 'LIXADEIRA 1'),
+    ('339-013', 'LIXADEIRA 2'),
+    ('339-013', 'LIXADEIRA 3'),
+    ('339-013', 'LIXADEIRA 4'),
+    ('339-013', 'LIXADEIRA 5'),
+    ('339-013', 'LIXADEIRA 6'),
     ('339-014', 'DESTACAR PEÇA 1'),
+    ('339-014', 'DESTACAR PEÇA 2'),
+    ('339-014', 'DESTACAR PEÇA 3'),
+    ('339-014', 'RECORTAR PEÇA FRESA 1'),
+    ('339-014', 'RECORTAR PEÇA FRESA 2'),
     ('339-015', 'CORTE TUPIA'),
     ('339-016', 'SERRA 3'),
     ('340-004', 'BOX DE MONTAGEM 6 - XBC'),
@@ -388,6 +434,8 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('340-006', 'BOX DE MONTAGEM 8 - 140L'),
     ('340-007', 'PONTEADEIRA FIXA'),
     ('340-009', 'BOX DE MONTAGEM 12'),
+    ('340-009', 'BOX DE MONTAGEM 14'),
+    ('340-009', 'BOX DE MONTAGEM 15'),
     ('340-010', 'BOX DE MONTAGEM 10'),
     ('340-011', 'BOX DE MONTAGEM 11'),
     ('340-012', 'BOX DE MONTAGEM 5 - 140L'),
@@ -400,10 +448,13 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('341-007', 'MESA 10 - ESCAPAMENTO'),
     ('341-008', 'LAVAR GALVANIZADOS'),
     ('343A', 'MÁQ. TERMO FORMAGEM (A) MARCOPOLO'),
+    ('343A', 'MÁQ. TERMO FORMAGEM (B) MARCOPOLO'),
     ('343B', 'MÁQ. TERMO FORMAGEM (MAQUINA 4)'),
     ('343C', 'MÁQ. TERMO FORMAGEM (MAQUINA 5)'),
     ('343D', 'MÁQ. TERMO FORMAGEM (A)'),
+    ('343D', 'MÁQ. TERMO FORMAGEM (B)'),
     ('343E', 'MAQUINA TERMOFORMAGEM'),
+    ('343E', 'MÁQ. TERMO FORMAGEM 2835 2 MOLDES'),
     ('345-001', 'CABINE PINTURA EPOXI'),
     ('345-002', 'BANCADA 06 - PINTURA A PO'),
     ('346-002', 'CURVADEIRA HORIZONTAL BLM'),
@@ -414,18 +465,36 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('349-005', 'MAQUINA P/ SERRAR TUBO'),
     ('350-001', 'CABINE DE PINTURA DE PECAS'),
     ('351-001', 'SETOR DE COLAGEM 1'),
+    ('351-001', 'SETOR DE COLAGEM 2'),
+    ('351-001', 'SETOR DE COLAGEM 3'),
+    ('351-001', 'SETOR DE COLAGEM 4'),
+    ('351-001', 'SETOR DE COLAGEM 5'),
+    ('351-001', 'SETOR DE COLAGEM 6'),
     ('351-003', 'MON/COL 1 - MARCOPOLO'),
+    ('351-003', 'MON/COL 10 - MARCOPOLO'),
+    ('351-003', 'MON/COL 2 - MARCOPOLO'),
+    ('351-003', 'MON/COL 3 - MARCOPOLO'),
+    ('351-003', 'MON/COL 4 - MARCOPOLO'),
+    ('351-003', 'MON/COL 5 - MARCOPOLO'),
+    ('351-003', 'MON/COL 6 - MARCOPOLO'),
+    ('351-003', 'MON/COL 7 - MARCOPOLO'),
+    ('351-003', 'MON/COL 8 - MARCOPOLO'),
+    ('351-003', 'MON/COL 9 - MARCOPOLO'),
     ('352-001', 'CENTRO ROBOTIZADO'),
     ('352-003', 'CENTRO ROBOTIZADO'),
+    ('352-003', 'CENTRO ROBOTIZADO 5'),
+    ('352-003', 'CENTRO ROBOTIZADO 6'),
     ('352-004', 'CENTRO ROBOTIZADO'),
     ('352-005', 'FRESADORA'),
     ('352-006', 'CENTRO ROBOTIZADO 8'),
+    ('352-006', 'CENTRO ROBOTIZADO 9'),
     ('352-007', 'MAQ. SOLDA ULTRASSOM 1'),
     ('361-001', 'GABARITO DE SOLDA TALA SUSPENSYS - 2P'),
     ('361-002', 'BANCADA MONT MANITOWOC'),
     ('361-005', 'GABARITO DE SOLDA TALA SUSPENSYS - 1P'),
     ('361-006', 'MESA MONTAGEM 37'),
     ('361-007', 'BANCADA DE SOLDA PEÇAS BETONEIRA'),
+    ('361-007', 'MESA PARA SOLDAR PEÇAS BETONEIRA'),
     ('362-001', 'MONTAGEM FRONTAL MB'),
     ('362-002', 'PONTEADEIRA AEREA'),
     ('362-003', 'DISP FECH LATERAL CAPO MARRUA'),
@@ -436,7 +505,7 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('362-008', 'MESA MONTAGEM MARRUA'),
     ('364-001', 'INJETORA DE ALTA PRESSÃO - POLIURETANO'),
     ('364-002', 'ACABAMENTO PU'),
-    ('367-001', '3101'),
+    ('367-001', '03101'),
     ('367-002', 'TANQUE ESTANQUIEDADE 1 e 2'),
     ('367-003', 'MAQUINA SOLDA OXIGENIO'),
     ('367-004', 'BANCADA DE AJUSTE ABERTURA'),
@@ -452,6 +521,7 @@ GRUPOS = [  # (código do grupo de máquina, descrição)
     ('367-015', 'MAQ. SOLDA REFORÇOS 1 MAN'),
     ('367-016', 'MAQ. SOLDA REFORÇOS 2 MAN'),
     ('TRN1', 'TREINAMENTO 1'),
+    ('TRN2', 'TREINAMENTO 2'),
 ]
 
 CONSTANTES = [
@@ -490,6 +560,10 @@ def _padrao():
 # PARÂMETROS
 # -----------------------------------------------------------------------------
 
+def _ptbr(v):
+    return f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 class Parametros:
     def __init__(self, tabelas):
         self.centros = tabelas["Centros de custo"]
@@ -501,10 +575,19 @@ class Parametros:
         self.grupos_df = tabelas["Grupos máquina"]
         gr = self.grupos_df.dropna(subset=["Código"])
         self._grupos = {str(c).strip(): ("" if pd.isna(d) else str(d)) for c, d in zip(gr["Código"], gr["Descrição"])}
+        pares = gr.drop_duplicates(["Código", "Descrição"])
+        self.grupos_opcoes = [f"{str(c).strip()} · {'' if pd.isna(x) else str(x).strip()}"
+                              for c, x in zip(pares["Código"], pares["Descrição"])]
+        self._rotulo_por_codigo = {}
+        for rot in self.grupos_opcoes:
+            self._rotulo_por_codigo.setdefault(rot.split(" · ")[0], rot)
         const = tabelas["Constantes"].dropna(subset=["Parâmetro", "Valor"])
         self.k = dict(zip(const["Parâmetro"], const["Valor"].astype(float)))
         cc = self.centros.dropna(subset=["Código", "R$/h"])
         self._cc = {int(float(cod)): float(v) for cod, v in zip(cc["Código"], cc["R$/h"])}
+        self._rotulo_cc = {int(float(cod)): f"{int(float(cod))} · {dsc} (R$ {_ptbr(v)}/h)"
+                           for cod, dsc, v in zip(cc["Código"], cc["Descrição"], cc["R$/h"])}
+        self.rotulos_cc = list(self._rotulo_cc.values())
 
     def taxa(self, cc):
         """R$/h do centro de custo."""
@@ -512,6 +595,24 @@ class Parametros:
             return self._cc[int(float(cc))]
         except (KeyError, ValueError, TypeError):
             raise ValueError(f"Centro de custo '{cc}' não encontrado na aba Parâmetros.") from None
+
+    def rotulo_grupo(self, codigo):
+        """'código · descrição' da primeira máquina do grupo (ou só o código se não existir)."""
+        return self._rotulo_por_codigo.get(str(codigo).strip(), str(codigo).strip())
+
+    @staticmethod
+    def separar_grupo(rotulo):
+        """'351-003 · MON/COL 1' -> ('351-003', 'MON/COL 1')."""
+        cod, _, desc = str(rotulo).partition(" · ")
+        return cod.strip(), desc.strip()
+
+    @staticmethod
+    def cc_de_rotulo(rotulo):
+        """'370 · CORTE LASER 2D (R$ 180,00/h)' -> 370."""
+        return int(float(str(rotulo).split(" · ")[0]))
+
+    def rotulo_cc(self, cc):
+        return self._rotulo_cc.get(int(float(cc)), str(cc))
 
     def grupo(self, codigo):
         """Descrição do grupo de máquina ('' se não estiver na tabela)."""
@@ -646,3 +747,12 @@ def _formatar(caminho):
         ws.auto_filter.ref = ws.dimensions
 
     wb.save(caminho)
+
+
+def restaurar_grupos():
+    """Troca a tabela de grupos de máquina do parametros.xlsx pela lista padrão."""
+    padrao = _padrao()
+    lidas = pd.read_excel(ARQ_PAR, sheet_name=None, dtype={"Código": str}) if ARQ_PAR.exists() else {}
+    tabelas = {**padrao, **lidas}
+    tabelas["Grupos máquina"] = padrao["Grupos máquina"]
+    salvar_parametros(tabelas)

@@ -12,13 +12,13 @@ import calculos as calc
 import dados as d
 import ficha as fi
 
-VERSAO = "2026-10-31.2"
+VERSAO = "2026-10-31.3"
 
 # recarrega os módulos a cada execução (evita ficar com versão antiga na memória)
 for _mod in (calc, d, fi):
     importlib.reload(_mod)
 
-st.set_page_config(page_title="Orçamentos", page_icon="🔎", layout="wide")
+st.set_page_config(page_title="Orçamentos", page_icon="🧮", layout="wide")
 
 _versoes = {"app.py": VERSAO, "calculos.py": getattr(calc, "VERSAO", "antiga"),
             "dados.py": getattr(d, "VERSAO", "antiga"), "ficha.py": getattr(fi, "VERSAO", "antiga")}
@@ -103,13 +103,15 @@ def cfg_num(rotulo, **kw):
 materiais = par.materiais["Descrição"].dropna().tolist()
 operacoes = par.operacoes["Operação"].dropna().tolist()
 tintas = par.tintas["Tinta"].dropna().tolist()
+grupos_opc = par.grupos_opcoes
+cc_rotulos = par.rotulos_cc
 cores = sorted(set(calc.CORES) | set(par.chapas["Cor"].dropna().astype(str)))
 centros = [int(float(x)) for x in par.centros["Código"].dropna()]
 nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
            for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
            if pd.notna(cod) and pd.notna(v)}
 
-st.markdown("## 🔎 Orçamentos")
+st.markdown("## 🧮 Orçamentos")
 tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_ficha, tab_hist, tab_par = st.tabs(
     ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Ficha", "Histórico", "Parâmetros"])
 
@@ -117,15 +119,27 @@ tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_ficha, tab_hist, ta
 with tab_abs:
     PAD = {"abs_cod": "", "abs_desc": "", "abs_lote": int(par.k[calc.K_LOTE]), "abs_comp": 1000, "abs_larg": 1000, "abs_esp": 3.0, "abs_cor": calc.CORES[0],
            "abs_peso": 1.0, "abs_pol": list(calc.POLIMEROS)[0], "abs_corte": "Corte Robô", "abs_conc": "Mesa"}
+    ABS_OPS = {"MOLDAR PEÇA": "mold", "DESTACAR PEÇA": "dest", "RECORTAR PEÇA": "rec", "DAR ACABAMENTO": "acab"}
+    for _op, _k in ABS_OPS.items():
+        _cc = int(par.k[calc.K_ABS_CC_TERMO if _op == "MOLDAR PEÇA" else calc.K_ABS_CC_ACAB])
+        PAD[f"abs_g_{_k}"] = par.rotulo_grupo(calc.GRUPOS_ABS[_op])
+        PAD[f"abs_c_{_k}"] = _cc if _cc in centros else centros[0]
     iniciar(PAD)
     s = st.session_state
+    for _op, _k in ABS_OPS.items():           # valores que sumiram das tabelas de Parâmetros
+        if s[f"abs_g_{_k}"] not in grupos_opc:
+            s[f"abs_g_{_k}"] = grupos_opc[0]
+        if s[f"abs_c_{_k}"] not in centros:
+            s[f"abs_c_{_k}"] = centros[0]
     col_f, col_r = st.columns([1.1, 1], gap="large")
 
     def params_abs():
         return dict(cod_item=s["abs_cod"].strip(), descricao=s["abs_desc"].strip(), lote=s["abs_lote"],
                     comprimento=s["abs_comp"], largura=s["abs_larg"],
                     espessura=s["abs_esp"], cor=s["abs_cor"], peso_liquido=s["abs_peso"],
-                    polimero_label=s["abs_pol"], tipo_corte=s["abs_corte"], conceito=s["abs_conc"])
+                    polimero_label=s["abs_pol"], tipo_corte=s["abs_corte"], conceito=s["abs_conc"],
+                    grupos={op: s[f"abs_g_{k}"] for op, k in ABS_OPS.items()},
+                    ccs={op: s[f"abs_c_{k}"] for op, k in ABS_OPS.items()})
 
     with col_f:
         with st.container(border=True):
@@ -152,6 +166,12 @@ with tab_abs:
             c7, c8 = st.columns(2)
             c7.radio("Tipo de corte", ["Corte Robô", "Corte Manual"], key="abs_corte", horizontal=True)
             c8.radio("Conceito", ["Mesa", "Caixa"], key="abs_conc", horizontal=True)
+            with st.expander("Grupo de máquina e centro de custo por operação"):
+                st.caption("Já vêm com os padrões da ficha. Troque se a peça passar por outra máquina.")
+                for _op, _k in ABS_OPS.items():
+                    e1, e2 = st.columns([3, 2])
+                    e1.selectbox(f"{_op.capitalize()} · grupo de máquina", grupos_opc, key=f"abs_g_{_k}")
+                    e2.selectbox("Centro de custo", centros, format_func=lambda x: nome_cc.get(x, str(x)), key=f"abs_c_{_k}")
 
         if botoes("abs", PAD):
             p = params_abs()
@@ -229,11 +249,15 @@ with tab_ins:
 
         with st.container(border=True):
             st.markdown("**Operações (roteiro)**")
-            st.caption("O centro de custo vem da operação. Setup é dividido pelo lote; tempo é multiplicado pelo nº de homens.")
+            st.caption("Centro de custo e grupo de máquina: escolha por linha ou deixe vazio para usar o padrão da operação. "
+                       "Setup é dividido pelo lote; tempo é multiplicado pelo nº de homens.")
             ops = st.data_editor(
-                tabela_vazia(**{"Operação": "object", "Setup (min)": "float64", "Tempo (min)": "float64", "Nº homens": "float64"}),
+                tabela_vazia(**{"Operação": "object", "Centro de custo": "object", "Grupo máquina": "object",
+                                "Setup (min)": "float64", "Tempo (min)": "float64", "Nº homens": "float64"}),
                 num_rows="dynamic", hide_index=True, key=f"ins_ops_{v}",
                 column_config={"Operação": st.column_config.SelectboxColumn("Operação", options=operacoes, width="large"),
+                               "Centro de custo": st.column_config.SelectboxColumn("Centro de custo", options=cc_rotulos, width="medium"),
+                               "Grupo máquina": st.column_config.SelectboxColumn("Grupo máquina", options=grupos_opc, width="large"),
                                "Setup (min)": cfg_num("Setup (min)"), "Tempo (min)": cfg_num("Tempo (min)"),
                                "Nº homens": cfg_num("Nº homens", help="Vazio = 1")})
 
@@ -293,7 +317,7 @@ with tab_ins:
                        "(não entram no custo da peça)")
             if not det["ops"].empty:
                 with st.expander("Custo por operação"):
-                    st.dataframe(det["ops"][["Operação", "C.C.", "R$/h", "Custo setup (R$)", "Custo tempo (R$)"]],
+                    st.dataframe(det["ops"][["Operação", "C.C.", "Grupo máquina", "R$/h", "Custo setup (R$)", "Custo tempo (R$)"]],
                                  hide_index=True)
 
 # =============================== PINTURA =====================================
@@ -360,16 +384,18 @@ with tab_pin:
 with tab_mon:
     padrao_cc = int(par.k[calc.K_MONT_CC])
     PAD = {"mon_cod": "", "mon_modo": "Tempo × centro de custo", "mon_tempo": 8.0, "mon_homens": 1,
-           "mon_cc": padrao_cc if padrao_cc in centros else centros[0], "mon_valor": 0.0}
+           "mon_cc": padrao_cc if padrao_cc in centros else centros[0], "mon_valor": 0.0, "mon_grupo": par.rotulo_grupo(calc.GRUPO_MONTAGEM)}
     iniciar(PAD)
     s = st.session_state
     if s["mon_cc"] not in centros:
         s["mon_cc"] = centros[0]
+    if s["mon_grupo"] not in grupos_opc:
+        s["mon_grupo"] = grupos_opc[0]
     col_f, col_r = st.columns([1.1, 1], gap="large")
 
     def params_mon():
         return dict(cod_item=s["mon_cod"].strip(), modo=s["mon_modo"], tempo=s["mon_tempo"],
-                    homens=s["mon_homens"], cc=s["mon_cc"], valor_direto=s["mon_valor"])
+                    homens=s["mon_homens"], cc=s["mon_cc"], valor_direto=s["mon_valor"], grupo=s["mon_grupo"])
 
     with col_f:
         with st.container(border=True):
@@ -385,6 +411,7 @@ with tab_mon:
                 t1.number_input("Tempo de montagem (min)", min_value=0.0, step=0.5, key="mon_tempo")
                 t2.number_input("Nº de homens", min_value=1, step=1, key="mon_homens")
                 st.selectbox("Centro de custo", centros, format_func=lambda x: nome_cc.get(x, str(x)), key="mon_cc")
+                st.selectbox("Grupo de máquina", grupos_opc, key="mon_grupo")
         if botoes("mon", PAD):
             p = params_mon()
             try:
@@ -499,12 +526,14 @@ with tab_ficha:
     cc_fi = int(par.k[calc.K_MONT_CC])
     PAD_FI = {"fi_num": "", "fi_cli": "", "fi_cod": "", "fi_desc": "", "fi_cons": 0, "fi_lote": int(par.k[calc.K_LOTE]),
               "fi_sim": "", "fi_mont": True, "fi_tempo": 8.0, "fi_homens": 1,
-              "fi_cc": cc_fi if cc_fi in centros else centros[0], "fi_pint": True, "fi_folha_mont": True}
+              "fi_cc": cc_fi if cc_fi in centros else centros[0], "fi_grupo": par.rotulo_grupo(calc.GRUPO_MONTAGEM), "fi_pint": True, "fi_folha_mont": True}
     iniciar(PAD_FI)
     st.session_state.setdefault("ver_fi", 0)
     s, v = st.session_state, st.session_state["ver_fi"]
     if s["fi_cc"] not in centros:
         s["fi_cc"] = centros[0]
+    if s["fi_grupo"] not in grupos_opc:
+        s["fi_grupo"] = grupos_opc[0]
 
     def limpar_ficha():
         resetar(PAD_FI, "ver_fi")
@@ -544,6 +573,7 @@ with tab_ficha:
                 g1.number_input("Tempo de montagem (min)", min_value=0.0, step=0.5, key="fi_tempo")
                 g2.number_input("Nº de homens", min_value=1, step=1, key="fi_homens")
                 st.selectbox("Centro de custo", centros, format_func=lambda x: nome_cc.get(x, str(x)), key="fi_cc")
+                st.selectbox("Grupo de máquina", grupos_opc, key="fi_grupo")
             st.checkbox("Levar a pintura salva (aba Pintura, mesmo código) como operação externa", key="fi_pint")
             st.checkbox("Gerar também a folha MONT (conjunto)", key="fi_folha_mont")
         st.button("Limpar", key="fi_limpar", on_click=limpar_ficha)
@@ -568,8 +598,9 @@ with tab_ficha:
         except Exception as e:
             erros.append(f"{cod}: {e}")
 
-    mont = ({"cc": s["fi_cc"], "grupo": fi.GRUPO_MONTAGEM, "setup": 0, "tempo": s["fi_tempo"], "homens": s["fi_homens"]}
-            if s["fi_mont"] else None)
+    _gcod, _gdesc = par.separar_grupo(s["fi_grupo"])
+    mont = ({"cc": s["fi_cc"], "grupo": _gcod, "grupo_desc": _gdesc, "setup": 0, "tempo": s["fi_tempo"],
+             "homens": s["fi_homens"]} if s["fi_mont"] else None)
     cab = {"numero": s["fi_num"].strip(), "cliente": s["fi_cli"].strip(), "codigo": s["fi_cod"].strip(),
            "descricao": s["fi_desc"].strip(), "consumo": s["fi_cons"], "lote": s["fi_lote"], "similar": s["fi_sim"].strip()}
 
@@ -703,6 +734,17 @@ with tab_par:
     with sub[7]:
         st.caption("Descrição de cada grupo de máquina (usada nas fichas).")
         novas["Grupos máquina"] = st.data_editor(par.grupos_df, num_rows="dynamic", hide_index=True, key="par_grupos")
+        st.caption("Um grupo pode ter várias máquinas (várias linhas com o mesmo código). Cada linha vira uma opção na escolha.")
+        if st.button("Restaurar a lista padrão de grupos", key="par_grupos_padrao"):
+            try:
+                d.restaurar_grupos()
+                st.session_state["_msg"] = "Lista de grupos restaurada"
+                _restaurou = True
+            except PermissionError:
+                st.error("Feche o parametros.xlsx no Excel e tente de novo.")
+                _restaurou = False
+            if _restaurou:
+                st.rerun()
 
     if st.button("💾 Salvar parâmetros", type="primary", key="par_salvar"):
         try:

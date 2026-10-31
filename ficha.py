@@ -14,14 +14,13 @@ from openpyxl import load_workbook
 
 import calculos as calc
 
-VERSAO = "2026-10-31.2"  # os 4 arquivos .py precisam estar na mesma versão
+VERSAO = "2026-10-31.3"  # os 4 arquivos .py precisam estar na mesma versão
 
 MODELO = Path(__file__).parent / "modelo_ficha.xlsx"
 
 # Grupos de máquina das operações do ABS (iguais aos da ficha preenchida)
-GRUPOS_ABS = {"MOLDAR PEÇA": "343A", "DESTACAR PEÇA": "339-014",
-              "RECORTAR PEÇA": "339-015", "DAR ACABAMENTO": "339-013"}
-GRUPO_MONTAGEM = "351-003"
+GRUPOS_ABS = calc.GRUPOS_ABS
+GRUPO_MONTAGEM = calc.GRUPO_MONTAGEM
 
 # Quantas linhas o modelo comporta em cada bloco da FICHA
 CAP_MP, CAP_TERC, CAP_OPS, CAP_FERR, CAP_ENS, CAP_OBS = 4, 3, 15, 7, 3, 5
@@ -94,13 +93,17 @@ def componente_abs(par, row, pintura=None):
     else:
         desc = f'CHAPA {_txt(row.get("Polímero"))} {_txt(row.get("Cor"))}'.strip()
 
-    cc_termo, cc_acab = k[calc.K_ABS_CC_TERMO], k[calc.K_ABS_CC_ACAB]
-    tempos = [("MOLDAR PEÇA", cc_termo, "Tempo Prep (min)", "Tempo Termo (min)"),
-              ("DESTACAR PEÇA", cc_acab, None, "Tempo Destacar (min)"),
-              ("RECORTAR PEÇA", cc_acab, None, "Tempo Recortar (min)"),
-              ("DAR ACABAMENTO", cc_acab, None, "Tempo Acabamento (min)")]
-    ops = [{"desc": nome, "cc": cc, "grupo": GRUPOS_ABS[nome], "setup": _num(row.get(c_setup)) if c_setup else 0,
-            "tempo": _num(row.get(c_tempo)), "homens": 1} for nome, cc, c_setup, c_tempo in tempos]
+    ops = []
+    for nome, chave, c_setup, c_tempo in (("MOLDAR PEÇA", "Moldar", "Tempo Prep (min)", "Tempo Termo (min)"),
+                                          ("DESTACAR PEÇA", "Destacar", None, "Tempo Destacar (min)"),
+                                          ("RECORTAR PEÇA", "Recortar", None, "Tempo Recortar (min)"),
+                                          ("DAR ACABAMENTO", "Acabamento", None, "Tempo Acabamento (min)")):
+        cc_padrao = k[calc.K_ABS_CC_TERMO] if nome == "MOLDAR PEÇA" else k[calc.K_ABS_CC_ACAB]
+        rot = _txt(row.get(f"Grupo {chave}"))
+        grupo, desc_grupo = par.separar_grupo(rot) if rot else (GRUPOS_ABS[nome], par.grupo(GRUPOS_ABS[nome]))
+        ops.append({"desc": nome, "cc": int(_num(row.get(f"C.C. {chave}"), cc_padrao)), "grupo": grupo,
+                    "grupo_desc": desc_grupo, "setup": _num(row.get(c_setup)) if c_setup else 0,
+                    "tempo": _num(row.get(c_tempo)), "homens": 1})
 
     return {
         "codigo": _txt(row["Código Item"]), "descricao": _txt(row.get("Descrição")), "qtd": 1, "tipo": "ABS",
@@ -137,6 +140,7 @@ def componente_insertos(par, row, detalhe, pintura=None):
                                       "Salve o orçamento de novo.")
                 continue
             comp["ops"].append({"desc": _txt(x["Descrição"]), "cc": int(float(x["C.C."])), "grupo": _txt(x.get("Grupo Máquina")),
+                                "grupo_desc": _txt(x.get("Descrição Grupo")) or par.grupo(_txt(x.get("Grupo Máquina"))),
                                 "setup": _num(x.get("Setup (min)")), "tempo": _num(x["Qtd / Tempo"]),
                                 "homens": _num(x.get("Nº Homens"), 1)})
         elif bloco == "Ferramental":
@@ -230,7 +234,7 @@ def _preencher_peca(ws, comp, par):
         _w(ws, f"B{r}", o["desc"])
         _w(ws, f"C{r}", o["cc"])
         _w(ws, f"D{r}", o["grupo"] or None)
-        _w(ws, f"E{r}", par.grupo(o["grupo"]) or None)
+        _w(ws, f"E{r}", o.get("grupo_desc") or par.grupo(o["grupo"]) or None)
         _w(ws, f"G{r}", o["setup"])
         _w(ws, f"H{r}", o["tempo"])
         _w(ws, f"I{r}", o["homens"])
@@ -274,7 +278,7 @@ def _preencher_mont(ws, cab, comps, nomes, mont, par):
         _w(ws, "B57", "MONTAR CONJUNTO")
         _w(ws, "C57", mont["cc"])
         _w(ws, "D57", mont["grupo"])
-        _w(ws, "E57", par.grupo(mont["grupo"]) or None)
+        _w(ws, "E57", mont.get("grupo_desc") or par.grupo(mont["grupo"]) or None)
         _w(ws, "G57", mont["setup"])
         _w(ws, "H57", mont["tempo"])
         _w(ws, "I57", mont["homens"])

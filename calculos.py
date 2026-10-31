@@ -7,7 +7,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pandas as pd
 
-VERSAO = "2026-10-31.2"  # os 4 arquivos .py precisam estar na mesma versão
+VERSAO = "2026-10-31.3"  # os 4 arquivos .py precisam estar na mesma versão
 
 # Nomes das constantes na tabela "Constantes" do parametros.xlsx
 K_LOTE = "Lote econômico (pç)"
@@ -24,6 +24,11 @@ K_PINT_HORA = "Pintura: valor hora (R$/h)"
 K_PINT_CONSUMO = "Pintura: consumo de tinta (L/mm², um lado)"
 K_PINT_TEMPO = "Pintura: tempo dos dois lados (min/mm²)"
 K_MONT_CC = "Montagem: centro de custo padrão"
+
+# Grupo de máquina padrão de cada operação do ABS (iguais aos da ficha) e da montagem
+GRUPOS_ABS = {"MOLDAR PEÇA": "343A", "DESTACAR PEÇA": "339-014",
+              "RECORTAR PEÇA": "339-015", "DAR ACABAMENTO": "339-013"}
+GRUPO_MONTAGEM = "351-003"
 
 POLIMEROS = {
     "ABS-s": ("ABS", 1.06),
@@ -58,8 +63,12 @@ def _txt(v):
 # -----------------------------------------------------------------------------
 
 def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
-                 peso_liquido, polimero_label, tipo_corte, conceito, lote=None, descricao=""):
-    """Devolve (linha para salvar, custo por etapa). Igual à ficha: tempos em 2 casas, setup rateado no lote."""
+                 peso_liquido, polimero_label, tipo_corte, conceito, lote=None, descricao="",
+                 grupos=None, ccs=None):
+    """Devolve (linha para salvar, custo por etapa). Igual à ficha: tempos em 2 casas, setup rateado no lote.
+
+    grupos / ccs: dict opcional {operação: 'código · descrição' do grupo} e {operação: centro de custo}.
+    """
     k = par.k
     lote = max(float(lote or k[K_LOTE]), 1.0)
     polimero, densidade = POLIMEROS[polimero_label]
@@ -76,8 +85,11 @@ def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
     if qtd <= 0:
         raise ValueError("Não é possível encaixar nenhuma peça na chapa com essas medidas.")
 
-    taxa_termo = par.taxa(k[K_ABS_CC_TERMO])
-    taxa_acab = par.taxa(k[K_ABS_CC_ACAB])
+    ccs, grupos = ccs or {}, grupos or {}
+    cc_op = {op: int(ccs.get(op) or (k[K_ABS_CC_TERMO] if op == "MOLDAR PEÇA" else k[K_ABS_CC_ACAB]))
+             for op in GRUPOS_ABS}
+    taxa = {op: par.taxa(cc) for op, cc in cc_op.items()}
+    rotulo = {op: grupos.get(op) or par.rotulo_grupo(GRUPOS_ABS[op]) for op in GRUPOS_ABS}
 
     termo_bruto = k[K_ABS_CICLO] / qtd
     termo = r2(termo_bruto)
@@ -87,11 +99,11 @@ def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
     acabamento = r2(perimetro * k[K_ABS_ACABAMENTO])
 
     custos = {
-        "Termoformagem": termo * taxa_termo / 60,
-        "Setup (preparação)": prep * taxa_termo / lote / 60,
-        "Destacar": destacar * taxa_acab / 60,
-        "Recortar": recortar * taxa_acab / 60,
-        "Acabamento": acabamento * taxa_acab / 60,
+        "Termoformagem": termo * taxa["MOLDAR PEÇA"] / 60,
+        "Setup (preparação)": prep * taxa["MOLDAR PEÇA"] / lote / 60,
+        "Destacar": destacar * taxa["DESTACAR PEÇA"] / 60,
+        "Recortar": recortar * taxa["RECORTAR PEÇA"] / 60,
+        "Acabamento": acabamento * taxa["DAR ACABAMENTO"] / 60,
     }
     custo_total = sum(custos.values())
 
@@ -115,6 +127,10 @@ def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
         "Tempo Acabamento (min)": acabamento,
         "Custo Recorte (R$)": round(custos["Recortar"], 2),
         "Custo Total (R$)": round(custo_total, 2),
+        "C.C. Moldar": cc_op["MOLDAR PEÇA"], "Grupo Moldar": rotulo["MOLDAR PEÇA"],
+        "C.C. Destacar": cc_op["DESTACAR PEÇA"], "Grupo Destacar": rotulo["DESTACAR PEÇA"],
+        "C.C. Recortar": cc_op["RECORTAR PEÇA"], "Grupo Recortar": rotulo["RECORTAR PEÇA"],
+        "C.C. Acabamento": cc_op["DAR ACABAMENTO"], "Grupo Acabamento": rotulo["DAR ACABAMENTO"],
     }
     return item, {nome: round(v, 2) for nome, v in custos.items()}
 
@@ -189,8 +205,16 @@ def calcular_insertos(par, mp, terc, ops, ferram, ensaios, lote):
 
     ops = ops.dropna(subset=["Operação"]).copy()
     cat_ops = par.operacoes.drop_duplicates("Operação").set_index("Operação")
-    ops["C.C."] = ops["Operação"].map(cat_ops["C.C."])
-    ops["Grupo máquina"] = ops["Operação"].map(cat_ops["Grupo máquina"])
+    for col in ("Centro de custo", "Grupo máquina"):      # escolhas opcionais; vazio = padrão da operação
+        if col not in ops.columns:
+            ops[col] = None
+    padrao_cc = ops["Operação"].map(cat_ops["C.C."])
+    padrao_gr = ops["Operação"].map(cat_ops["Grupo máquina"])
+    ops["C.C."] = [par.cc_de_rotulo(r) if _txt(r) else p for r, p in zip(ops["Centro de custo"], padrao_cc)]
+    grupos = [par.separar_grupo(r) if _txt(r) else (_txt(p), par.grupo(_txt(p)))
+              for r, p in zip(ops["Grupo máquina"], padrao_gr)]
+    ops["Grupo máquina"] = [g[0] for g in grupos]
+    ops["Descrição grupo"] = [g[1] for g in grupos]
     ops["R$/h"] = [par.taxa(cc) for cc in ops["C.C."]]
     homens = _col(ops, "Nº homens").fillna(1.0)
     ops["Custo setup (R$)"] = ops["R$/h"] * _col(ops, "Setup (min)").fillna(0.0) / lote / 60
@@ -238,6 +262,7 @@ def detalhe_insertos(cod, det):
         add("Operação", x["Operação"], x["Tempo (min)"], "min", x["R$/h"],
             x["Custo setup (R$)"] + x["Custo tempo (R$)"],
             **{"C.C.": int(float(x["C.C."])), "Grupo Máquina": _txt(x["Grupo máquina"]),
+               "Descrição Grupo": _txt(x["Descrição grupo"]),
                "Setup (min)": x["Setup (min)"], "Nº Homens": 1 if pd.isna(x["Nº homens"]) else x["Nº homens"]})
     for bloco, chave in (("Ferramental", "ferram"), ("Ensaio", "ensaios")):
         for _, x in det[chave].iterrows():
@@ -280,7 +305,7 @@ def calcular_pintura(par, cod_item, cod_marcopolo, comprimento, largura, area_ma
 # MONTAGEM e PESO
 # -----------------------------------------------------------------------------
 
-def calcular_montagem(par, cod_item, modo, tempo, homens, cc, valor_direto):
+def calcular_montagem(par, cod_item, modo, tempo, homens, cc, valor_direto, grupo=None):
     if modo == "Valor direto (R$)":
         custo, taxa = valor_direto, None
     else:
@@ -290,6 +315,7 @@ def calcular_montagem(par, cod_item, modo, tempo, homens, cc, valor_direto):
         "Código Item": cod_item,
         "Modo": modo,
         "Centro de Custo": cc if taxa is not None else "",
+        "Grupo Máquina": (grupo or par.rotulo_grupo(GRUPO_MONTAGEM)) if taxa is not None else "",
         "Tempo (min)": tempo if taxa is not None else "",
         "Nº Homens": homens if taxa is not None else "",
         "Custo Montagem (R$)": round(custo, 2),
