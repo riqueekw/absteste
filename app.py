@@ -2,13 +2,16 @@
 # ORÇAMENTOS  |  rodar com:  streamlit run app.py
 # app.py = telas | calculos.py = regras | dados.py = Excel (parâmetros e orçamentos)
 # =============================================================================
+import re
+
 import pandas as pd
 import streamlit as st
 
 import calculos as calc
 import dados as d
+import ficha as fi
 
-st.set_page_config(page_title="Orçamentos", page_icon="🔎", layout="wide")
+st.set_page_config(page_title="Orçamentos", page_icon="🧮", layout="wide")
 
 st.markdown("""
 <style>
@@ -91,27 +94,31 @@ nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
            for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
            if pd.notna(cod) and pd.notna(v)}
 
-st.markdown("## 🔎 Orçamentos")
-tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_hist, tab_par = st.tabs(
-    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Histórico", "Parâmetros"])
+st.markdown("## 🧮 Orçamentos")
+tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_ficha, tab_hist, tab_par = st.tabs(
+    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Ficha", "Histórico", "Parâmetros"])
 
 # =============================== ABS =========================================
 with tab_abs:
-    PAD = {"abs_cod": "", "abs_comp": 1000, "abs_larg": 1000, "abs_esp": 3.0, "abs_cor": calc.CORES[0],
+    PAD = {"abs_cod": "", "abs_desc": "", "abs_lote": int(par.k[calc.K_LOTE]), "abs_comp": 1000, "abs_larg": 1000, "abs_esp": 3.0, "abs_cor": calc.CORES[0],
            "abs_peso": 1.0, "abs_pol": list(calc.POLIMEROS)[0], "abs_corte": "Corte Robô", "abs_conc": "Mesa"}
     iniciar(PAD)
     s = st.session_state
     col_f, col_r = st.columns([1.1, 1], gap="large")
 
     def params_abs():
-        return dict(cod_item=s["abs_cod"].strip(), comprimento=s["abs_comp"], largura=s["abs_larg"],
+        return dict(cod_item=s["abs_cod"].strip(), descricao=s["abs_desc"].strip(), lote=s["abs_lote"],
+                    comprimento=s["abs_comp"], largura=s["abs_larg"],
                     espessura=s["abs_esp"], cor=s["abs_cor"], peso_liquido=s["abs_peso"],
                     polimero_label=s["abs_pol"], tipo_corte=s["abs_corte"], conceito=s["abs_conc"])
 
     with col_f:
         with st.container(border=True):
             st.markdown("**Identificação**")
-            st.text_input("Código do item", key="abs_cod", placeholder="Código único do item")
+            i1, i2, i3 = st.columns([1, 2, 1])
+            i1.text_input("Código do item", key="abs_cod", placeholder="Código único do item")
+            i2.text_input("Descrição da peça", key="abs_desc")
+            i3.number_input("Lote econômico (pç)", min_value=1, step=10, key="abs_lote")
         with st.container(border=True):
             st.markdown("**Dimensões**")
             c1, c2, c3 = st.columns(3)
@@ -420,12 +427,12 @@ with tab_aprov:
             a1, a2, a3 = st.columns(3)
             a1.number_input("Espessura (mm)", min_value=0.0, step=0.1, key="ap_esp")
             a2.number_input("Largura (mm)", min_value=0.0, step=10.0, key="ap_cl")
-            a3.number_input("Comp. (mm)", min_value=0.0, step=10.0, key="ap_cc")
+            a3.number_input("Comprimento (mm)", min_value=0.0, step=10.0, key="ap_cc")
         with st.container(border=True):
             st.markdown("**Blank a ser cortado**")
             b1, b2, b3 = st.columns(3)
             b1.number_input("Largura (mm)", min_value=0.0, step=1.0, key="ap_pl")
-            b2.number_input("Comp. (mm)", min_value=0.0, step=1.0, key="ap_pc")
+            b2.number_input("Comprimento (mm)", min_value=0.0, step=1.0, key="ap_pc")
             b3.number_input("Peças por blank", min_value=1, step=1, key="ap_qt",
                             help="Ex.: 2 quando saem as peças D/E do mesmo blank")
         st.button("Limpar", key="ap_limpar", on_click=resetar, args=(PAD,))
@@ -466,6 +473,130 @@ with tab_aprov:
                     f'= {m["Peças por chapa"]} peças por chapa. Peso da peça {num(tot["Peso peça (kg)"], 3)} kg; '
                     f'retalho {num(m["Retalho por peça (kg)"], 3)} kg por peça; aproveitamento {num(m["Aproveitamento (%)"], 1)}%.')
                 st.text_area("Resumo para as observações do orçamento", resumo, height=120)
+
+# ================================== FICHA ====================================
+with tab_ficha:
+    df_abs, df_ins = d.carregar("Orçamentos"), d.carregar("Insertos")
+    det_ins, df_pin = d.carregar("Insertos - Detalhe"), d.carregar("Pintura")
+    opcoes = ([f"{c} · ABS" for c in df_abs["Código Item"].astype(str)] if not df_abs.empty else []) + \
+             ([f"{c} · Insertos" for c in df_ins["Código Item"].astype(str)] if not df_ins.empty else [])
+
+    cc_fi = int(par.k[calc.K_MONT_CC])
+    PAD_FI = {"fi_num": "", "fi_cli": "", "fi_cod": "", "fi_desc": "", "fi_cons": 0, "fi_lote": int(par.k[calc.K_LOTE]),
+              "fi_sim": "", "fi_mont": True, "fi_tempo": 8.0, "fi_homens": 1,
+              "fi_cc": cc_fi if cc_fi in centros else centros[0], "fi_pint": True, "fi_folha_mont": True}
+    iniciar(PAD_FI)
+    st.session_state.setdefault("ver_fi", 0)
+    s, v = st.session_state, st.session_state["ver_fi"]
+    if s["fi_cc"] not in centros:
+        s["fi_cc"] = centros[0]
+
+    def limpar_ficha():
+        resetar(PAD_FI, "ver_fi")
+        st.session_state.pop("fi_arquivo", None)
+
+    col_f, col_r = st.columns([1.2, 1], gap="large")
+    with col_f:
+        with st.container(border=True):
+            st.markdown("**Conjunto**")
+            f1, f2 = st.columns(2)
+            f1.text_input("Nº do orçamento", key="fi_num", placeholder="Ex.: 055-10-2026")
+            f2.text_input("Cliente", key="fi_cli")
+            f3, f4 = st.columns([1, 2])
+            f3.text_input("Código / desenho", key="fi_cod")
+            f4.text_input("Descrição da peça", key="fi_desc")
+            f5, f6, f7 = st.columns(3)
+            f5.number_input("Consumo peças/mês", min_value=0, step=10, key="fi_cons")
+            f6.number_input("Lote econômico (pç)", min_value=1, step=10, key="fi_lote")
+            f7.text_input("Item similar", key="fi_sim")
+
+        with st.container(border=True):
+            st.markdown("**Componentes do conjunto**")
+            if not opcoes:
+                st.info("Salve orçamentos nas abas ABS ou Insertos para poder montar a ficha.")
+            st.caption("Cada linha vira uma folha FICHA. Escolha o orçamento salvo e a quantidade por conjunto (vazio = 1).")
+            editor = st.data_editor(
+                tabela_vazia(**{"Componente": "object", "Qtd por conjunto": "float64"}),
+                num_rows="dynamic", hide_index=True, key=f"fi_comp_{v}",
+                column_config={"Componente": st.column_config.SelectboxColumn("Orçamento salvo", options=opcoes, width="large"),
+                               "Qtd por conjunto": cfg_num("Qtd por conjunto")})
+
+        with st.container(border=True):
+            st.markdown("**Montagem e opções**")
+            st.checkbox("Incluir montagem do conjunto", key="fi_mont")
+            if s["fi_mont"]:
+                g1, g2 = st.columns(2)
+                g1.number_input("Tempo de montagem (min)", min_value=0.0, step=0.5, key="fi_tempo")
+                g2.number_input("Nº de homens", min_value=1, step=1, key="fi_homens")
+                st.selectbox("Centro de custo", centros, format_func=lambda x: nome_cc.get(x, str(x)), key="fi_cc")
+            st.checkbox("Levar a pintura salva (aba Pintura, mesmo código) como operação externa", key="fi_pint")
+            st.checkbox("Gerar também a folha MONT (conjunto)", key="fi_folha_mont")
+        st.button("Limpar", key="fi_limpar", on_click=limpar_ficha)
+
+    # ----- monta os componentes a partir dos orçamentos salvos -----
+    comps, erros = [], []
+    for _, linha in editor.dropna(subset=["Componente"]).iterrows():
+        cod, tipo = linha["Componente"].rsplit(" · ", 1)
+        qtd = linha["Qtd por conjunto"]
+        qtd = 1.0 if pd.isna(qtd) or qtd <= 0 else float(qtd)
+        pint = None
+        if s["fi_pint"] and not df_pin.empty:
+            achou = df_pin[df_pin["Código Item"].astype(str) == cod]
+            pint = achou.iloc[-1] if not achou.empty else None
+        try:
+            if tipo == "ABS":
+                comp = fi.componente_abs(par, df_abs[df_abs["Código Item"].astype(str) == cod].iloc[-1], pint)
+            else:
+                comp = fi.componente_insertos(par, df_ins[df_ins["Código Item"].astype(str) == cod].iloc[-1], det_ins, pint)
+            comp["qtd"], comp["lote"] = qtd, s["fi_lote"]
+            comps.append(comp)
+        except Exception as e:
+            erros.append(f"{cod}: {e}")
+
+    mont = ({"cc": s["fi_cc"], "grupo": fi.GRUPO_MONTAGEM, "setup": 0, "tempo": s["fi_tempo"], "homens": s["fi_homens"]}
+            if s["fi_mont"] else None)
+    cab = {"numero": s["fi_num"].strip(), "cliente": s["fi_cli"].strip(), "codigo": s["fi_cod"].strip(),
+           "descricao": s["fi_desc"].strip(), "consumo": s["fi_cons"], "lote": s["fi_lote"], "similar": s["fi_sim"].strip()}
+
+    with col_r:
+        st.markdown("**Prévia do conjunto**")
+        for e in erros:
+            st.warning(e)
+        if comps:
+            try:
+                linhas_prev = []
+                for c_ in comps:
+                    x = fi.custos_peca(par, c_)
+                    linhas_prev.append({"Componente": f'{c_["codigo"]} ({c_["tipo"]})', "Qtd": c_["qtd"],
+                                        "Custo unit. (R$)": round(x["Total"], 2), "Total (R$)": round(x["Total"] * c_["qtd"], 2)})
+                tot = fi.totais_conjunto(par, comps, mont, s["fi_lote"])
+                st.metric("Custo do conjunto", brl(tot["Total"]))
+                p1, p2, p3 = st.columns(3)
+                p1.metric("Mão de obra", brl(tot["Mão de obra"]))
+                p2.metric("Set-up", brl(tot["Set-up"]))
+                p3.metric("Matéria-prima + externo", brl(tot["Matéria-prima"] + tot["Externo"]))
+                st.dataframe(pd.DataFrame(linhas_prev), hide_index=True)
+                st.caption("Mesmas somas da folha MONT (o set-up não multiplica pela quantidade, como no modelo). "
+                           "Matéria-prima do cliente fica sem preço, igual à ficha.")
+            except Exception as e:
+                st.error(f"Erro no cálculo: {e}")
+            else:
+                if st.button("📄 Gerar ficha", type="primary", key="fi_gerar"):
+                    try:
+                        arq, avisos = fi.gerar(par, cab, comps, mont, s["fi_folha_mont"])
+                        nome = re.sub(r"[^\w.-]", "_", cab["codigo"] or comps[0]["codigo"])
+                        s["fi_arquivo"] = (arq, f"FICHA_{nome}.xlsx", avisos)
+                    except Exception as e:
+                        st.error(f"Erro ao gerar a ficha: {e}")
+                if "fi_arquivo" in s:
+                    arq, nome_arq, avisos = s["fi_arquivo"]
+                    for av in avisos:
+                        st.warning(av)
+                    st.download_button("⬇️ Baixar ficha (.xlsx)", data=arq, file_name=nome_arq,
+                                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    st.caption("A ficha baixada é a gerada no último clique em Gerar ficha.")
+        elif not erros:
+            st.caption("Adicione ao menos um componente para ver o custo e gerar a ficha.")
 
 # =============================== HISTÓRICO ===================================
 with tab_hist:
@@ -525,7 +656,7 @@ with tab_hist:
 # =============================== PARÂMETROS ==================================
 with tab_par:
     st.caption("Preços, taxas e constantes usados em todos os cálculos. Ficam em parametros.xlsx.")
-    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes", "Chapas ABS", "Densidades"])
+    sub = st.tabs(["Centros de custo", "Materiais (insertos)", "Tintas", "Operações", "Constantes", "Chapas ABS", "Densidades", "Grupos máquina"])
     novas = {}
     with sub[0]:
         novas["Centros de custo"] = st.data_editor(par.centros, num_rows="dynamic", hide_index=True, key="par_cc")
@@ -543,14 +674,20 @@ with tab_par:
         novas["Constantes"] = st.data_editor(
             const, hide_index=True, key="par_const", disabled=["Parâmetro", "Obs."], num_rows="fixed",
             column_config={"Valor": st.column_config.NumberColumn("Valor", format="%g")})
+
     with sub[5]:
         st.caption("Polímero em branco = a chapa serve para qualquer polímero (ex.: ABS/PC).")
         novas["Chapas"] = st.data_editor(
             par.chapas, num_rows="dynamic", hide_index=True, key="par_chapas",
             column_config={"Polímero": st.column_config.SelectboxColumn("Polímero", options=list(calc.POLIMEROS))})
+
     with sub[6]:
         st.caption("Densidade em g/cm³ (usada na aba Aproveitamento).")
         novas["Densidades"] = st.data_editor(par.densidades, num_rows="dynamic", hide_index=True, key="par_dens")
+
+    with sub[7]:
+        st.caption("Descrição de cada grupo de máquina (usada nas fichas).")
+        novas["Grupos máquina"] = st.data_editor(par.grupos_df, num_rows="dynamic", hide_index=True, key="par_grupos")
 
     if st.button("💾 Salvar parâmetros", type="primary", key="par_salvar"):
         try:

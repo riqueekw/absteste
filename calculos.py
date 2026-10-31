@@ -3,6 +3,7 @@
 Preços, taxas e constantes NÃO ficam aqui: vêm do parametros.xlsx (objeto `par`, ver dados.py).
 """
 import math
+from decimal import ROUND_HALF_UP, Decimal
 
 import pandas as pd
 
@@ -41,6 +42,11 @@ def _col(df, nome):
     return pd.to_numeric(df[nome], errors="coerce")
 
 
+def r2(x):
+    """Arredonda em 2 casas como o Excel (0,125 -> 0,13)."""
+    return float(Decimal(str(x)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 def _txt(v):
     return "" if pd.isna(v) else str(v)
 
@@ -50,9 +56,10 @@ def _txt(v):
 # -----------------------------------------------------------------------------
 
 def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
-                 peso_liquido, polimero_label, tipo_corte, conceito):
-    """Devolve (linha para salvar, custo por etapa)."""
+                 peso_liquido, polimero_label, tipo_corte, conceito, lote=None, descricao=""):
+    """Devolve (linha para salvar, custo por etapa). Igual à ficha: tempos em 2 casas, setup rateado no lote."""
     k = par.k
+    lote = max(float(lote or k[K_LOTE]), 1.0)
     polimero, densidade = POLIMEROS[polimero_label]
     cto, adc = (200, 0.3) if conceito == "Mesa" else (100, 0.0)  # Mesa / Caixa
 
@@ -70,15 +77,16 @@ def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
     taxa_termo = par.taxa(k[K_ABS_CC_TERMO])
     taxa_acab = par.taxa(k[K_ABS_CC_ACAB])
 
-    termo = k[K_ABS_CICLO] / qtd
-    prep = termo * k[K_ABS_PREP]
-    destacar = perimetro * k[K_ABS_DESTACAR]
-    recortar = perimetro * k[K_ABS_RECORTAR]
-    acabamento = perimetro * k[K_ABS_ACABAMENTO]
+    termo_bruto = k[K_ABS_CICLO] / qtd
+    termo = r2(termo_bruto)
+    prep = r2(termo_bruto * k[K_ABS_PREP])
+    destacar = r2(perimetro * k[K_ABS_DESTACAR])
+    recortar = r2(perimetro * k[K_ABS_RECORTAR])
+    acabamento = r2(perimetro * k[K_ABS_ACABAMENTO])
 
     custos = {
         "Termoformagem": termo * taxa_termo / 60,
-        "Preparação": prep * taxa_acab / 60,
+        "Setup (preparação)": prep * taxa_termo / lote / 60,
         "Destacar": destacar * taxa_acab / 60,
         "Recortar": recortar * taxa_acab / 60,
         "Acabamento": acabamento * taxa_acab / 60,
@@ -87,23 +95,27 @@ def calcular_abs(par, cod_item, comprimento, largura, espessura, cor,
 
     item = {
         "Código Item": cod_item,
+        "Descrição": descricao,
         "Polímero": polimero,
         "Cor": cor,
         "Tipo Corte": tipo_corte,
         "Conceito": conceito,
+        "Espessura (mm)": espessura,
+        "Lote Econômico (pç)": int(lote),
         "Blank (mm)": f"{blank_c} x {blank_l}",
         "Peso Líquido (kg)": round(peso_liquido, 3),
         "Peso Bruto (kg)": round(peso_bruto, 3),
         "Qtd Peças/Chapa": qtd,
-        "Tempo Termo (min)": round(termo, 2),
-        "Tempo Prep (min)": round(prep, 2),
-        "Tempo Destacar (min)": round(destacar, 2),
-        "Tempo Recortar (min)": round(recortar, 2),
-        "Tempo Acabamento (min)": round(acabamento, 2),
+        "Tempo Termo (min)": termo,
+        "Tempo Prep (min)": prep,
+        "Tempo Destacar (min)": destacar,
+        "Tempo Recortar (min)": recortar,
+        "Tempo Acabamento (min)": acabamento,
         "Custo Recorte (R$)": round(custos["Recortar"], 2),
         "Custo Total (R$)": round(custo_total, 2),
     }
     return item, {nome: round(v, 2) for nome, v in custos.items()}
+
 
 def recomendar_chapa(par, comprimento, largura, espessura, cor, polimero_label, conceito):
     """Melhor chapa cadastrada (aba Parâmetros > Chapas ABS) para o blank da peça.
@@ -149,6 +161,7 @@ def recomendar_chapa(par, comprimento, largura, espessura, cor, polimero_label, 
     df = pd.DataFrame(linhas).sort_values(["Aproveitamento (%)", "Peças/chapa"], ascending=False, kind="stable")
     return df.reset_index(drop=True), ""
 
+
 # -----------------------------------------------------------------------------
 # INSERTOS (chapas, operações, terceiros)
 # -----------------------------------------------------------------------------
@@ -164,6 +177,7 @@ def calcular_insertos(par, mp, terc, ops, ferram, ensaios, lote):
     mp = mp.dropna(subset=["Material"]).copy()
     cat = par.materiais.drop_duplicates("Descrição").set_index("Descrição")
     mp["Un"] = mp["Material"].map(cat["Un"])
+    mp["Código"] = mp["Material"].map(cat["Código"])
     preco_tabela = mp["Material"].map(cat["Preço (R$)"])
     mp["Preço unit. (R$)"] = _col(mp, "Preço unit. (R$)").fillna(preco_tabela).fillna(0.0)
     mp["Total (R$)"] = _col(mp, "Qtd").fillna(0.0) * mp["Preço unit. (R$)"]
@@ -174,6 +188,7 @@ def calcular_insertos(par, mp, terc, ops, ferram, ensaios, lote):
     ops = ops.dropna(subset=["Operação"]).copy()
     cat_ops = par.operacoes.drop_duplicates("Operação").set_index("Operação")
     ops["C.C."] = ops["Operação"].map(cat_ops["C.C."])
+    ops["Grupo máquina"] = ops["Operação"].map(cat_ops["Grupo máquina"])
     ops["R$/h"] = [par.taxa(cc) for cc in ops["C.C."]]
     homens = _col(ops, "Nº homens").fillna(1.0)
     ops["Custo setup (R$)"] = ops["R$/h"] * _col(ops, "Setup (min)").fillna(0.0) / lote / 60
@@ -201,24 +216,27 @@ def linha_insertos(cod, descricao, lote, r):
 
 
 def detalhe_insertos(cod, det):
-    """Composição do orçamento em formato 'longo' (uma linha por item) para a aba de detalhe."""
+    """Composição do orçamento em formato 'longo' (uma linha por item) para a aba de detalhe.
+    As colunas extras (Código, Fornecedor, C.C., Grupo Máquina...) alimentam a FICHA."""
     linhas = []
 
-    def add(bloco, desc, qtd, un, preco, total):
-        linhas.append({"Código Item": cod, "Bloco": bloco, "Descrição": desc, "Qtd / Tempo": qtd,
-                       "Un": un, "Preço / Taxa (R$)": preco, "Total (R$)": round(float(total), 2)})
+    def add(bloco, desc, qtd, un, preco, total, **extra):
+        linha = {"Código Item": cod, "Bloco": bloco, "Descrição": desc, "Qtd / Tempo": qtd, "Un": un,
+                 "Preço / Taxa (R$)": preco, "Total (R$)": round(float(total), 2)}
+        linha.update(extra)
+        linhas.append(linha)
 
     for _, x in det["mp"].iterrows():
-        add("Matéria-prima", x["Material"], x["Qtd"], _txt(x["Un"]), x["Preço unit. (R$)"], x["Total (R$)"])
+        add("Matéria-prima", x["Material"], x["Qtd"], _txt(x["Un"]), x["Preço unit. (R$)"], x["Total (R$)"],
+            **{"Código": _txt(x["Código"])})
     for _, x in det["terc"].iterrows():
-        forn = _txt(x.get("Fornecedor"))
-        add("Terceiros", f'{x["Descrição"]}' + (f" ({forn})" if forn else ""),
-            x["Qtd"], "", x["Preço unit. (R$)"], x["Total (R$)"])
+        add("Terceiros", x["Descrição"], x["Qtd"], "", x["Preço unit. (R$)"], x["Total (R$)"],
+            Fornecedor=_txt(x.get("Fornecedor")))
     for _, x in det["ops"].iterrows():
-        setup = 0 if pd.isna(x["Setup (min)"]) else x["Setup (min)"]
-        homens = 1 if pd.isna(x["Nº homens"]) else x["Nº homens"]
-        add("Operação", f'{x["Operação"]} (C.C. {int(float(x["C.C."]))}; setup {setup} min; {homens} h)',
-            x["Tempo (min)"], "min", x["R$/h"], x["Custo setup (R$)"] + x["Custo tempo (R$)"])
+        add("Operação", x["Operação"], x["Tempo (min)"], "min", x["R$/h"],
+            x["Custo setup (R$)"] + x["Custo tempo (R$)"],
+            **{"C.C.": int(float(x["C.C."])), "Grupo Máquina": _txt(x["Grupo máquina"]),
+               "Setup (min)": x["Setup (min)"], "Nº Homens": 1 if pd.isna(x["Nº homens"]) else x["Nº homens"]})
     for bloco, chave in (("Ferramental", "ferram"), ("Ensaio", "ensaios")):
         for _, x in det[chave].iterrows():
             add(bloco, x["Descrição"], "", "", "", x["Valor (R$)"])
@@ -280,6 +298,7 @@ def calcular_peso(espessura, largura, comprimento, tipo):
     """mm x mm x mm x g/cm³ / 1.000.000 = kg. Devolve (peso, peso +30%)."""
     peso = espessura * largura * comprimento * DENSIDADES_PESO[tipo] / 1_000_000
     return peso, peso * 1.3
+
 
 # -----------------------------------------------------------------------------
 # APROVEITAMENTO DE CHAPA (guilhotina)
