@@ -32,6 +32,20 @@ if len(set(_versoes.values())) > 1:
 
 st.markdown("""
 <style>
+:root {--primary-color: #117c72;}
+/* Mantém a seleção verde mesmo quando o navegador guarda um tema anterior. */
+label[data-baseweb="radio"]:has(input:checked) > div:first-of-type {
+    background-color: #117c72 !important; border-color: #117c72 !important;
+}
+[data-testid="stButton"] button:hover,
+[data-testid="stDownloadButton"] button:hover {
+    border-color: #117c72 !important; color: #117c72;
+}
+[data-testid="stButton"] button[kind="primary"]:hover {color: #fff; background: #0e695f;}
+[data-testid="stButton"] button:focus-visible,
+[data-testid="stDownloadButton"] button:focus-visible {
+    outline: 2px solid #117c72; outline-offset: 2px;
+}
 .block-container {padding-top: 2rem; padding-bottom: 3rem; max-width: 1480px;}
 [data-testid="stAppViewContainer"] {background: var(--background-color);}
 h1, h2, h3 {letter-spacing: -.035em;}
