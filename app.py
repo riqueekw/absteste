@@ -4,6 +4,8 @@
 # =============================================================================
 import importlib
 import re
+import streamlit.components.v1 as components
+from visual import desenho_chapa
 
 import pandas as pd
 import streamlit as st
@@ -30,14 +32,31 @@ if len(set(_versoes.values())) > 1:
 
 st.markdown("""
 <style>
-.block-container {padding-top: 2.5rem; max-width: 1300px;}
+.block-container {padding-top: 2rem; padding-bottom: 3rem; max-width: 1480px;}
+[data-testid="stAppViewContainer"] {background: var(--background-color);}
+h1, h2, h3 {letter-spacing: -.035em;}
+[data-testid="stVerticalBlockBorderWrapper"] > div {border-radius: 18px;}
+[data-testid="stTabs"] [role="tablist"] {gap: 6px; padding: 8px; border-radius: 14px; background: var(--secondary-background-color);}
+[data-testid="stTabs"] [role="tab"] {padding: 10px 16px; height: 43px; border-radius: 9px; border: 0;}
+[data-testid="stTabs"] [aria-selected="true"] {background: #117c72; color: white;}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {background: transparent;}
+[data-testid="stButton"] button, [data-testid="stDownloadButton"] button {border-radius: 10px; min-height: 42px; font-weight: 600;}
+[data-testid="stButton"] button[kind="primary"] {background: #117c72; border-color: #117c72; color: #fff;}
+[data-testid="stNumberInput"] input, [data-testid="stTextInput"] input {font-variant-numeric: tabular-nums;}
 [data-testid="stMetric"] {
-    background: rgba(128,128,128,0.08);
-    border: 1px solid rgba(128,128,128,0.25);
-    border-radius: 10px;
-    padding: 12px 16px;
+    background: var(--secondary-background-color);
+    border: 1px solid rgba(128,128,128,0.16);
+    border-top: 3px solid #168b80;
+    border-radius: 14px;
+    padding: 16px 18px;
 }
-[data-testid="stMetricLabel"] {opacity: 0.75;}
+[data-testid="stMetricLabel"] {opacity: 0.75; font-size: .85rem;}
+[data-testid="stMetricValue"] {font-size: 1.6rem; letter-spacing: -.04em;}
+.app-hero {padding: 28px 32px; margin: 0 0 24px; border-radius: 22px; background: linear-gradient(115deg, #122d3b, #14594f); color: #fff;}
+.app-hero .eyebrow {color: #8fdbca; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;}
+.app-hero h1 {color: #fff; font-size: 32px; font-weight: 700; margin: 5px 0 8px; padding: 0;}
+.app-hero p {color: #d3e6e4; font-size: 14px; margin: 0;}
+@media(max-width: 700px) {.block-container {padding-left: 1rem; padding-right: 1rem;} .app-hero {padding: 22px;} .app-hero h1 {font-size: 26px;}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,7 +130,8 @@ nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
            for cod, desc, v in zip(par.centros["Código"], par.centros["Descrição"], par.centros["R$/h"])
            if pd.notna(cod) and pd.notna(v)}
 
-st.markdown("## 🧮 Orçamentos")
+st.markdown('''<div class="app-hero"><div class="eyebrow">Engenharia · custos · produção</div>
+<h1>Orçamentos</h1><p>Da matéria-prima ao conjunto. Calcule, compare e gere sua ficha em um só lugar.</p></div>''', unsafe_allow_html=True)
 tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_ficha, tab_hist, tab_par = st.tabs(
     ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Ficha", "Histórico", "Parâmetros"])
 
@@ -453,6 +473,8 @@ with tab_peso:
 
 # ============================ APROVEITAMENTO =================================
 with tab_aprov:
+    st.subheader("Planeje o corte da chapa")
+    st.caption("Compare as duas orientações do blank e visualize a distribuição dos cortes em escala.")
     mat_chapa = par.densidades["Material"].dropna().tolist()
     PAD = {"ap_mat": mat_chapa[0], "ap_esp": 1.5, "ap_cl": 1000.0, "ap_cc": 2810.0,
            "ap_pl": 453.0, "ap_pc": 496.0, "ap_qt": 1}
@@ -494,7 +516,7 @@ with tab_aprov:
 
             for col, (nome, m) in zip(st.columns(2), modelos.items()):
                 with col.container(border=True):
-                    st.markdown(f"**{nome}**" + ("  ·  ✅ **É ESSE**" if nome == melhor else ""))
+                    st.markdown(f"**{nome}**" + ("  ·  Melhor aproveitamento" if nome == melhor else ""))
                     st.caption(f'Blank {num(m["Largura (mm)"], 0)} × {num(m["Comprimento (mm)"], 0)} mm (largura × comprimento)')
                     if m["Peças por chapa"] == 0:
                         st.error("Não cabe na chapa.")
@@ -505,6 +527,19 @@ with tab_aprov:
                     st.metric("Consumo por peça (kg)", num(m["Consumo por peça (kg)"], 4))
                     st.metric("Retalho por peça (kg)", num(m["Retalho por peça (kg)"], 4))
                     st.caption(f'{m["Tiras por chapa"]} tiras por chapa × {m["Peças por tira"]} peças por tira')
+
+            with st.container(border=True):
+                st.markdown("### Distribuição na chapa")
+                escolhido = st.radio("Orientação do desenho", list(modelos),
+                                    index=list(modelos).index(melhor) if melhor else 0,
+                                    horizontal=True, key="ap_desenho_modelo")
+                desenho = desenho_chapa(s["ap_cl"], s["ap_cc"], modelos[escolhido], escolhido)
+                components.html('<html><body style="margin:0;background:transparent">' + desenho + '</body></html>', height=470, scrolling=False)
+                st.caption("Cada retângulo verde representa um blank; a região hachurada é a sobra. "
+                           "Simulação de corte em guilhotina, sem folga de corte ou margem de borda. "
+                           f'Cada blank produz {s["ap_qt"]} peça(s).')
+                st.download_button("Baixar desenho (.svg)", desenho.encode("utf-8"),
+                                   file_name="aproveitamento_chapa.svg", mime="image/svg+xml", key="ap_svg")
 
             if melhor:
                 m = modelos[melhor]
