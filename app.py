@@ -6,6 +6,7 @@ import importlib
 import re
 import streamlit.components.v1 as components
 from visual import desenho_chapa
+import fluxograma
 
 import pandas as pd
 import streamlit as st
@@ -146,8 +147,8 @@ nome_cc = {int(float(cod)): f"{int(float(cod))} · {desc} ({brl(float(v))}/h)"
 
 st.markdown('''<div class="app-hero"><div class="eyebrow">Engenharia · custos · produção</div>
 <h1>Orçamentos</h1><p>Da matéria-prima ao conjunto. Calcule, compare e gere sua ficha em um só lugar.</p></div>''', unsafe_allow_html=True)
-tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_ficha, tab_hist, tab_par = st.tabs(
-    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Ficha", "Histórico", "Parâmetros"])
+tab_abs, tab_ins, tab_pin, tab_mon, tab_peso, tab_aprov, tab_ficha, tab_fluxo, tab_hist, tab_par = st.tabs(
+    ["ABS", "Insertos", "Pintura", "Montagem", "Peso", "Aproveitamento", "Ficha", "Fluxograma", "Histórico", "Parâmetros"])
 
 # =============================== ABS =========================================
 with tab_abs:
@@ -805,3 +806,6 @@ with tab_par:
             salvo = False
         if salvo:
             st.rerun()
+
+with tab_fluxo:
+    fluxograma.interface()
