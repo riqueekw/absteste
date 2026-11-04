@@ -47,151 +47,203 @@ def ler(aba, coord):
     return str(valor)
 
 
-def _destino(base, alvo):
-    return alvo.lstrip("/") if alvo.startswith("/") else posixpath.normpath(posixpath.join(base, alvo))
+TIPOS = ["", "Fabricar", "Mover", "Armazenar", "Inspecionar"]
+ESPECIAIS = ["", "Segurança", "Crítica", "Importante"]
+COLS = ["Nº operação", "Tipo", "Processo", "Característica", "Descrição"]
+GLIFOS = {"Fabricar": "◆", "Mover": "●", "Armazenar": "▼", "Inspecionar": "■",
+          "Segurança": "Ⓢ", "Crítica": "▱", "Importante": "—"}
 
 
-def _celula(root, coord, valor):
-    dados = root.find(NS + "sheetData")
-    linha = int(re.search(r"\d+$", coord).group())
-    row = dados.find(f"{NS}row[@r='{linha}']")
-    if row is None:
-        row = ET.Element(NS + "row", r=str(linha))
-        anterior = next((r for r in dados if int(r.get("r", 0)) > linha), None)
-        dados.append(row) if anterior is None else anterior.addprevious(row)
-    c = row.find(f"{NS}c[@r='{coord}']")
-    if c is None:
-        c = ET.Element(NS + "c", r=coord)
-        coluna = coord.rstrip("0123456789")
-        anterior = next((x for x in row if x.tag == NS + "c" and
-                         (len(x.get("r").rstrip("0123456789")), x.get("r").rstrip("0123456789")) >
-                         (len(coluna), coluna)), None)
-        row.append(c) if anterior is None else anterior.addprevious(c)
-    for filho in list(c):
-        if filho.tag in {NS + "v", NS + "f", NS + "is"}:
-            c.remove(filho)
-    c.attrib.pop("t", None)
-    if valor != "":
-        c.set("t", "inlineStr")
-        texto = ET.SubElement(ET.SubElement(c, NS + "is"), NS + "t")
-        texto.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-        texto.text = valor
+def importar(conteudo):
+    import json
+    # Os arquivos gerados guardam os dados editáveis para reabertura fiel.
+    with ZipFile(BytesIO(conteudo)) as z:
+        if "fluxograma/dados.json" in z.namelist():
+            return json.loads(z.read("fluxograma/dados.json"))
+        desenhos = {}
+        for n in z.namelist():
+            if n.startswith("xl/drawings/drawing") and n.endswith(".xml"):
+                desenhos[n] = ET.fromstring(z.read(n))
+        wbxml = ET.fromstring(z.read("xl/workbook.xml"))
+        rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
+        caminhos = {r.get("Id"): posixpath.normpath(posixpath.join("xl", r.get("Target"))) for r in rels}
+        simbolos = {}
+        for sheet in wbxml.find(NS + "sheets"):
+            path = caminhos[sheet.get(RID)]
+            relpath = posixpath.join(posixpath.dirname(path), "_rels", posixpath.basename(path)+".rels")
+            if relpath not in z.namelist():
+                continue
+            for rel in ET.fromstring(z.read(relpath)):
+                dest = posixpath.normpath(posixpath.join(posixpath.dirname(path), rel.get("Target")))
+                if dest not in desenhos:
+                    continue
+                for anchor in desenhos[dest]:
+                    row = anchor.findtext(".//{*}from/{*}row")
+                    col = anchor.findtext(".//{*}from/{*}col")
+                    geom = anchor.find(".//{*}prstGeom")
+                    if row is None or col is None or geom is None:
+                        continue
+                    tipo = {4:"Fabricar",6:"Mover",8:"Armazenar",10:"Inspecionar"}.get(int(col))
+                    if tipo:
+                        simbolos.setdefault((sheet.get("name"), int(row)+1), []).append(tipo)
+    resultado = {}
+    with closing(abrir(conteudo)) as w:
+        for aba in w:
+            cab, cols, linhas = campos(aba)
+            if cols == REVISOES:
+                resultado[aba.title] = {"revisao": True, "cab": {}, "linhas":
+                    [{rot:ler(aba,f"{c}{r}") for c,rot in cols.items()} for r in linhas]}
+            else:
+                registros=[]
+                for r in linhas:
+                    tipos=simbolos.get((aba.title,r),[])
+                    registros.append({"Nº operação":ler(aba,f"A{r}"),
+                        "Tipo":tipos[0] if tipos else "",
+                        "Processo":"Externo" if ler(aba,f"N{r}").upper()=="X" else "Interno" if ler(aba,f"M{r}").upper()=="X" else "",
+                        "Característica":"", "Descrição":ler(aba,f"P{r}")})
+                resultado[aba.title]={"revisao":False,"cab":{rot:ler(aba,c) for c,rot in cab.items()},
+                                     "linhas":registros}
+    return resultado
 
 
-def gerar_excel(conteudo, alteracoes):
-    saida = BytesIO()
-    with ZipFile(BytesIO(conteudo)) as origem, ZipFile(saida, "w") as destino:
-        livro = ET.fromstring(origem.read("xl/workbook.xml"))
-        relacoes = ET.fromstring(origem.read("xl/_rels/workbook.xml.rels"))
-        caminhos = {r.get("Id"): _destino("xl", r.get("Target")) for r in relacoes}
-        novos = {}
-        for aba in livro.find(NS + "sheets"):
-            nome = aba.get("name")
-            aba.attrib.pop("state", None)
-            caminho = caminhos[aba.get(RID)]
-            root = ET.fromstring(origem.read(caminho))
-            for c in root.iter(NS + "c"):
-                f = c.find(NS + "f")
-                if c.get("r", "").startswith("D") and f is not None and "#REF!" in (f.text or ""):
-                    _celula(root, c.get("r"), "")
-            for coord, valor in alteracoes.get(nome, {}).items():
-                _celula(root, coord, valor)
-            novos[caminho] = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
-        novos["xl/workbook.xml"] = ET.tostring(livro, encoding="UTF-8", xml_declaration=True)
-        for info in origem.infolist():
-            destino.writestr(info, novos.get(info.filename, origem.read(info)))
-    return saida.getvalue()
+def gerar_excel(dados):
+    import json
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.worksheet.pagebreak import Break
+    w=Workbook()
+    w.remove(w.active)
+    for nome, folha in dados.items():
+        s=w.create_sheet(nome)
+        revisao=folha["revisao"]
+        cols=list(REVISOES.values()) if revisao else COLS
+        n=len(cols)
+        s.merge_cells(start_row=1,start_column=1,end_row=1,end_column=n)
+        s.cell(1,1,"CONTROLE DE REVISÕES" if revisao else "FLUXOGRAMA DO PROCESSO · FO-030")
+        s.row_dimensions[1].height=30
+        for i,(k,v) in enumerate(folha["cab"].items(),2):
+            s.merge_cells(start_row=i,start_column=1,end_row=i,end_column=n)
+            s.cell(i,1,f"{k}: {v}")
+            s.row_dimensions[i].height=22
+        h=len(folha["cab"])+3
+        for c,t in enumerate(cols,1): s.cell(h,c,t)
+        for r,linha in enumerate(folha["linhas"],h+1):
+            for c,k in enumerate(cols,1):
+                valor=str(linha.get(k,"") or "")
+                if k in ("Tipo","Característica") and valor:
+                    valor=GLIFOS.get(valor,"")+" "+valor
+                cell=s.cell(r,c,valor)
+                cell.data_type="s"
+            comprimento=len(str(linha.get("Descrição","")))
+            s.row_dimensions[r].height=max(32, 15*(1+comprimento//65))
+        fim=s.max_row
+        for row in s:
+            for c in row:
+                c.font=Font(name="DejaVu Sans",size=10)
+                c.alignment=Alignment(vertical="center",wrap_text=True)
+                c.border=Border(bottom=Side(style="hair",color="CBD5E1"))
+                if c.row in (1,h):
+                    c.fill=PatternFill("solid",fgColor="14594F")
+                    c.font=Font(name="DejaVu Sans",size=11,bold=True,color="FFFFFF")
+        larguras=[13,20,16,22,85] if not revisao else [13,22,65,24,24,18]
+        for i,largura in enumerate(larguras,1):
+            from openpyxl.utils import get_column_letter
+            s.column_dimensions[get_column_letter(i)].width=largura
+        s.sheet_view.showGridLines=False
+        s.freeze_panes=f"A{h+1}"
+        s.print_title_rows=f"1:{h}"
+        s.print_area=f"A1:{get_column_letter(n)}{fim}"
+        s.page_setup.orientation="landscape"
+        s.page_setup.paperSize=s.PAPERSIZE_A4
+        s.page_setup.fitToWidth=1
+        s.page_setup.fitToHeight=0
+        s.sheet_properties.pageSetUpPr.fitToPage=True
+    buf=BytesIO();w.save(buf)
+    with ZipFile(buf,"a") as z:
+        z.writestr("fluxograma/dados.json",json.dumps(dados,ensure_ascii=False))
+    return buf.getvalue()
 
 
-def gerar_pdf(excel):
-    comando = shutil.which("soffice") or shutil.which("libreoffice")
-    if not comando:
-        raise RuntimeError("Instale o LibreOffice Calc para gerar PDF. No Streamlit Cloud, inclua packages.txt no GitHub.")
-    with TemporaryDirectory(prefix="fo030-") as pasta:
-        pasta = Path(pasta)
-        arquivo = pasta / "fluxograma.xlsx"
-        arquivo.write_bytes(excel)
-        subprocess.run(
-            [comando, f"-env:UserInstallation={(pasta / 'perfil').as_uri()}", "--headless",
-             "--convert-to", 'pdf:calc_pdf_Export:{"SinglePageSheets":{"type":"boolean","value":"true"}}',
-             "--outdir", str(pasta), str(arquivo)],
-            check=True, capture_output=True, timeout=120,
-        )
-        pdf = pasta / "fluxograma.pdf"
-        if not pdf.is_file():
-            raise RuntimeError("O LibreOffice não retornou o PDF.")
-        return pdf.read_bytes()
+def gerar_pdf(dados):
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from xml.sax.saxutils import escape
+    font=Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    if font.exists():
+        pdfmetrics.registerFont(TTFont("Fluxo",str(font)))
+    nomefont="Fluxo" if font.exists() else "Helvetica"
+    estilos=getSampleStyleSheet()
+    for estilo in estilos.byName.values(): estilo.fontName=nomefont
+    estilos["BodyText"].fontSize=8
+    estilos["BodyText"].leading=11
+    def par(v):return Paragraph(escape(str(v or "")).replace("\n","<br/>"),estilos["BodyText"])
+    historia=[]
+    for nome,f in dados.items():
+        if historia:historia.append(PageBreak())
+        historia.append(Paragraph(escape(nome),estilos["Heading2"]))
+        for k,v in f["cab"].items():historia.append(par(f"{k}: {v}"))
+        cols=list(REVISOES.values()) if f["revisao"] else COLS
+        linhas=[[par(c) for c in cols]]
+        for item in f["linhas"]:
+            linhas.append([par((GLIFOS.get(str(item.get(c,"")),"")+" " if c in ("Tipo","Característica") else "")+str(item.get(c,"") or "")) for c in cols])
+        larguras=[55,90,65,90,482] if not f["revisao"] else [50,95,310,110,120,97]
+        t=Table(linhas,colWidths=larguras,repeatRows=1,splitByRow=1,splitInRow=1)
+        t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#D7EAE5")),
+                              ("GRID",(0,0),(-1,-1),.4,colors.HexColor("#94A3B8")),
+                              ("VALIGN",(0,0),(-1,-1),"TOP"),
+                              ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7)]))
+        historia.append(t)
+    buf=BytesIO()
+    SimpleDocTemplate(buf,pagesize=landscape(A4),leftMargin=30,rightMargin=30,topMargin=28,bottomMargin=28).build(historia)
+    return buf.getvalue()
 
 
 def interface():
     import hashlib
     import pandas as pd
     import streamlit as st
-
-    st.subheader("Fluxograma de processo · FO-030")
-    st.caption("Comece pelo modelo ou importe um Excel FO-030 para continuar a edição.")
-    arquivo = st.file_uploader("Abrir fluxograma existente", type=["xlsx"], key="fo030_arquivo")
-    conteudo = arquivo.getvalue() if arquivo else MODELO.read_bytes()
-    chave = hashlib.sha256(conteudo).hexdigest()[:16]
-    if st.session_state.get("fo030_fonte") != chave:
-        st.session_state.update(fo030_fonte=chave, fo030_edicoes={}, fo030_pdf=None)
-
-    try:
-        livro = abrir(conteudo)
-    except Exception:
-        st.error("Não consegui abrir esse arquivo. Selecione uma planilha .xlsx no formato FO-030.")
-        return
-    with closing(livro):
-        nome = st.selectbox("Aba do fluxograma", livro.sheetnames, key=f"fo030_aba_{chave}")
-        aba = livro[nome]
-        cabecalho, colunas, linhas = campos(aba)
-        edicoes = st.session_state["fo030_edicoes"]
-        anterior = edicoes.get(nome, {})
-        if linhas:
-            versao = hashlib.sha256(repr(anterior).encode()).hexdigest()[:12]
-            prefixo = f"fo030_{chave}_{livro.sheetnames.index(nome)}_{versao}"
-            with st.form(prefixo):
-                valores = {}
-                for coord, rotulo in cabecalho.items():
-                    valores[coord] = st.text_input(rotulo, value=anterior.get(coord, ler(aba, coord)))
-                tabela = pd.DataFrame([
-                    {rotulo: anterior.get(f"{col}{r}", ler(aba, f"{col}{r}"))
-                     for col, rotulo in colunas.items()} for r in linhas
-                ])
-                editada = st.data_editor(tabela, hide_index=True, use_container_width=True,
-                                         num_rows="fixed", key=f"{prefixo}_tabela")
-                if st.form_submit_button("Aplicar edição desta aba", type="primary"):
-                    for i, r in enumerate(linhas):
-                        for col, rotulo in colunas.items():
-                            valor = editada.iloc[i][rotulo]
-                            valores[f"{col}{r}"] = "" if pd.isna(valor) else str(valor)
-                    novas = {coord: valor for coord, valor in valores.items()
-                             if valor != ler(aba, coord)}
-                    if novas != anterior:
-                        edicoes[nome] = novas
-                        st.session_state["fo030_pdf"] = None
-                        st.toast("Alterações aplicadas.")
-                        st.rerun()
-            if colunas == OPERACOES:
-                st.caption(f"{len(linhas)} linhas de operação nesta folha. "
-                           "Os desenhos e conectores originais ficam no Excel e no PDF. "
-                           "Para preencher as colunas de operação no modelo, use ◇ Fabricar, ● Mover, ◢ Armazenar ou ■ Inspecionar.")
-        else:
-            st.info("Esta aba não segue a estrutura editável do FO-030. Ela será incluída nas exportações.")
-
-        st.caption(f"{len(livro.sheetnames)} abas incluídas no Excel e no PDF. Aplique a edição antes de trocar de aba ou exportar.")
-        excel = gerar_excel(conteudo, edicoes)
-
-    base = Path(arquivo.name).stem if arquivo else "Fluxograma_FO-030"
-    col_excel, col_pdf = st.columns(2)
-    col_excel.download_button("Baixar Excel", excel, f"{base}.xlsx",
-                              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    if col_pdf.button("Gerar PDF", key="fo030_gerar_pdf"):
-        try:
-            with st.spinner("Convertendo todas as abas em PDF…"):
-                st.session_state["fo030_pdf"] = gerar_pdf(excel)
-        except (RuntimeError, subprocess.SubprocessError, OSError) as erro:
-            st.error(f"Não consegui gerar o PDF. {erro}")
-    if st.session_state["fo030_pdf"]:
-        col_pdf.download_button("Baixar PDF", st.session_state["fo030_pdf"],
-                                f"{base}.pdf", "application/pdf")
+    st.subheader("Fluxograma de processo")
+    arquivo=st.file_uploader("Abrir Excel para editar",type=["xlsx"],key="fluxo_v2_upload")
+    conteudo=arquivo.getvalue() if arquivo else MODELO.read_bytes()
+    chave=hashlib.sha256(conteudo).hexdigest()
+    if st.session_state.get("fluxo_v2_hash")!=chave:
+        try: dados=importar(conteudo)
+        except Exception as e:
+            st.error(f"Não consegui importar a planilha: {e}")
+            return
+        st.session_state.update(fluxo_v2_hash=chave,fluxo_v2_dados=dados,fluxo_v2_export=None)
+    dados=st.session_state["fluxo_v2_dados"]
+    nome=st.selectbox("Folha",list(dados),key="fluxo_v2_folha")
+    f=dados[nome]
+    with st.form("fluxo_v2_form_"+chave+nome):
+        cab={k:st.text_input(k,value=str(v)) for k,v in f["cab"].items()}
+        config={}
+        if not f["revisao"]:
+            config={"Tipo":st.column_config.SelectboxColumn(options=TIPOS),
+                    "Processo":st.column_config.SelectboxColumn(options=["","Interno","Externo"]),
+                    "Característica":st.column_config.SelectboxColumn(options=ESPECIAIS)}
+        cols=list(REVISOES.values()) if f["revisao"] else COLS
+        tabela=st.data_editor(pd.DataFrame(f["linhas"],columns=cols).fillna(""),
+                             column_config=config,num_rows="dynamic",hide_index=True,
+                             use_container_width=True,key="fluxo_v2_edit_"+chave+nome)
+        st.caption("Use a linha vazia no final para adicionar operações. Selecione linhas para excluir.")
+        aplicar=st.form_submit_button("Salvar alterações")
+        exportar=st.form_submit_button("Salvar e gerar Excel + PDF",type="primary")
+    if aplicar or exportar:
+        f["cab"]=cab
+        f["linhas"]=tabela.fillna("").to_dict("records")
+        st.session_state["fluxo_v2_export"]=None
+        if exportar:
+            try:
+                st.session_state["fluxo_v2_export"]=(gerar_excel(dados),gerar_pdf(dados))
+            except Exception as e:st.error(f"Falha na exportação: {e}")
+        else:st.success("Folha salva. Você pode trocar de folha.")
+    st.caption("Salve antes de trocar de folha. As exportações incluem todas as folhas salvas e a edição atual.")
+    if st.session_state["fluxo_v2_export"]:
+        x,p=st.session_state["fluxo_v2_export"]
+        st.download_button("Baixar Excel",x,"Fluxograma.xlsx",key="fluxo_v2_xlsx")
+        st.download_button("Baixar PDF",p,"Fluxograma.pdf",key="fluxo_v2_pdf")
