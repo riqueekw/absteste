@@ -1,0 +1,25 @@
+ATUALIZAÇÃO DO PROGRAMA — FLUXOGRAMA FO-030
+
+GitHub / Streamlit Cloud
+1. Extraia o ZIP. Envie os arquivos extraídos para a raiz do repositório,
+   junto do app.py. Mantenha as planilhas e os modelos que já usa.
+2. Se já houver requirements.txt ou packages.txt, acrescente apenas as linhas
+   que faltam. O PDF usa libreoffice-calc, listado em packages.txt.
+3. Faça o commit. Se precisar, reinicie o app pelo painel do Streamlit Cloud.
+   O arquivo .streamlit/config.toml configura o tema escuro e verde.
+
+Uso
+1. Abra a aba Fluxograma. O modelo em branco já vem no pacote.
+2. Para editar um documento existente, importe o Excel FO-030.
+3. Selecione a aba, altere os campos e clique em Aplicar edição desta aba.
+4. Baixe o Excel ou clique em Gerar PDF e depois em Baixar PDF.
+   Ambos incluem todas as abas. Guarde o Excel para retomar a edição.
+
+Os campos editáveis seguem as linhas existentes em cada folha. No modelo
+padrão há quatro abas de código, com cinco operações por aba, e REVISÃO.
+As formas desenhadas, legendas e conexões originais são preservadas.
+
+Execução local
+Instale as dependências com pip install -r requirements.txt e abra com
+streamlit run app.py. Para gerar PDF localmente, instale o LibreOffice Calc
+e deixe o comando soffice acessível pelo PATH.
