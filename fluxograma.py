@@ -107,99 +107,13 @@ def importar(conteudo):
 
 
 def gerar_excel(dados):
-    import json
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.worksheet.pagebreak import Break
-    w=Workbook()
-    w.remove(w.active)
-    for nome, folha in dados.items():
-        s=w.create_sheet(nome)
-        revisao=folha["revisao"]
-        cols=list(REVISOES.values()) if revisao else COLS
-        n=len(cols)
-        s.merge_cells(start_row=1,start_column=1,end_row=1,end_column=n)
-        s.cell(1,1,"CONTROLE DE REVISÕES" if revisao else "FLUXOGRAMA DO PROCESSO · FO-030")
-        s.row_dimensions[1].height=30
-        for i,(k,v) in enumerate(folha["cab"].items(),2):
-            s.merge_cells(start_row=i,start_column=1,end_row=i,end_column=n)
-            s.cell(i,1,f"{k}: {v}")
-            s.row_dimensions[i].height=22
-        h=len(folha["cab"])+3
-        for c,t in enumerate(cols,1): s.cell(h,c,t)
-        for r,linha in enumerate(folha["linhas"],h+1):
-            for c,k in enumerate(cols,1):
-                valor=str(linha.get(k,"") or "")
-                if k in ("Tipo","Característica") and valor:
-                    valor=GLIFOS.get(valor,"")+" "+valor
-                cell=s.cell(r,c,valor)
-                cell.data_type="s"
-            comprimento=len(str(linha.get("Descrição","")))
-            s.row_dimensions[r].height=max(32, 15*(1+comprimento//65))
-        fim=s.max_row
-        for row in s:
-            for c in row:
-                c.font=Font(name="DejaVu Sans",size=10)
-                c.alignment=Alignment(vertical="center",wrap_text=True)
-                c.border=Border(bottom=Side(style="hair",color="CBD5E1"))
-                if c.row in (1,h):
-                    c.fill=PatternFill("solid",fgColor="14594F")
-                    c.font=Font(name="DejaVu Sans",size=11,bold=True,color="FFFFFF")
-        larguras=[13,20,16,22,85] if not revisao else [13,22,65,24,24,18]
-        for i,largura in enumerate(larguras,1):
-            from openpyxl.utils import get_column_letter
-            s.column_dimensions[get_column_letter(i)].width=largura
-        s.sheet_view.showGridLines=False
-        s.freeze_panes=f"A{h+1}"
-        s.print_title_rows=f"1:{h}"
-        s.print_area=f"A1:{get_column_letter(n)}{fim}"
-        s.page_setup.orientation="landscape"
-        s.page_setup.paperSize=s.PAPERSIZE_A4
-        s.page_setup.fitToWidth=1
-        s.page_setup.fitToHeight=0
-        s.sheet_properties.pageSetUpPr.fitToPage=True
-    buf=BytesIO();w.save(buf)
-    with ZipFile(buf,"a") as z:
-        z.writestr("fluxograma/dados.json",json.dumps(dados,ensure_ascii=False))
-    return buf.getvalue()
+    from layout_fluxograma import gerar_excel as exportar
+    return exportar(dados)
 
 
 def gerar_pdf(dados):
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib import colors
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    from xml.sax.saxutils import escape
-    font=Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
-    if font.exists():
-        pdfmetrics.registerFont(TTFont("Fluxo",str(font)))
-    nomefont="Fluxo" if font.exists() else "Helvetica"
-    estilos=getSampleStyleSheet()
-    for estilo in estilos.byName.values(): estilo.fontName=nomefont
-    estilos["BodyText"].fontSize=8
-    estilos["BodyText"].leading=11
-    def par(v):return Paragraph(escape(str(v or "")).replace("\n","<br/>"),estilos["BodyText"])
-    historia=[]
-    for nome,f in dados.items():
-        if historia:historia.append(PageBreak())
-        historia.append(Paragraph(escape(nome),estilos["Heading2"]))
-        for k,v in f["cab"].items():historia.append(par(f"{k}: {v}"))
-        cols=list(REVISOES.values()) if f["revisao"] else COLS
-        linhas=[[par(c) for c in cols]]
-        for item in f["linhas"]:
-            linhas.append([par((GLIFOS.get(str(item.get(c,"")),"")+" " if c in ("Tipo","Característica") else "")+str(item.get(c,"") or "")) for c in cols])
-        larguras=[55,90,65,90,482] if not f["revisao"] else [50,95,310,110,120,97]
-        t=Table(linhas,colWidths=larguras,repeatRows=1,splitByRow=1,splitInRow=1)
-        t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#D7EAE5")),
-                              ("GRID",(0,0),(-1,-1),.4,colors.HexColor("#94A3B8")),
-                              ("VALIGN",(0,0),(-1,-1),"TOP"),
-                              ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7)]))
-        historia.append(t)
-    buf=BytesIO()
-    SimpleDocTemplate(buf,pagesize=landscape(A4),leftMargin=30,rightMargin=30,topMargin=28,bottomMargin=28).build(historia)
-    return buf.getvalue()
+    from layout_fluxograma import gerar_pdf as exportar
+    return exportar(dados)
 
 
 def interface():
